@@ -6190,6 +6190,8 @@ mysql_execute_command(THD *thd)
   case SQLCOM_CALL:
     DBUG_ASSERT(lex->m_sql_cmd != NULL);
     res= lex->m_sql_cmd->execute(thd);
+    DBUG_PRINT("result", ("res: %d  killed: %d  is_error: %d",
+                          res, thd->killed, thd->is_error()));
     break;
   default:
 

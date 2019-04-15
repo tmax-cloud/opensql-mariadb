@@ -11,3 +11,6 @@
 [submodule "extra/wolfssl/wolfssl"]
 	path = extra/wolfssl/wolfssl
 	url = https://github.com/wolfSSL/wolfssl.git
+[submodule "storage/maria/libmarias3"]
+	path = storage/maria/libmarias3
+	url = https://github.com/mariadb-corporation/libmarias3
