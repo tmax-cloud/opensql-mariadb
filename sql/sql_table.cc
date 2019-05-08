@@ -2812,7 +2812,8 @@ bool log_drop_table(THD *thd, const LEX_CSTRING *db_name,
 */
 
 bool quick_rm_table(THD *thd, handlerton *base, const LEX_CSTRING *db,
-                    const LEX_CSTRING *table_name, uint flags, const char *table_path)
+                    const LEX_CSTRING *table_name, uint flags,
+                    const char *table_path)
 {
   char path[FN_REFLEN + 1];
   int error= 0;
@@ -2820,11 +2821,13 @@ bool quick_rm_table(THD *thd, handlerton *base, const LEX_CSTRING *db,
 
   size_t path_length= table_path ?
     (strxnmov(path, sizeof(path) - 1, table_path, reg_ext, NullS) - path) :
-    build_table_filename(path, sizeof(path)-1, db->str, table_name->str, reg_ext, flags);
-  if (mysql_file_delete(key_file_frm, path, MYF(0)))
-    error= 1; /* purecov: inspected */
+    build_table_filename(path, sizeof(path)-1, db->str, table_name->str,
+                         reg_ext, flags);
+  if (!(flags & NO_FRM_RENAME))
+    if (mysql_file_delete(key_file_frm, path, MYF(0)))
+      error= 1; /* purecov: inspected */
   path[path_length - reg_ext_length]= '\0'; // Remove reg_ext
-  if (flags & NO_HA_TABLE)
+  if ((flags & (NO_HA_TABLE | NO_PAR_TABLE)) == NO_HA_TABLE)
   {
     handler *file= get_new_handler((TABLE_SHARE*) 0, thd->mem_root, base);
     if (!file)
@@ -9629,6 +9632,7 @@ bool mysql_alter_table(THD *thd, const LEX_CSTRING *new_db,
                        Alter_info *alter_info,
                        uint order_num, ORDER *order, bool ignore)
 {
+  bool engine_changed;
   DBUG_ENTER("mysql_alter_table");
 
   /*
@@ -10557,6 +10561,23 @@ do_continue:;
      alter_ctx.tmp_storage_engine_name.str);
 
   /*
+    Check if file names for the engine are unique.  If we change engine
+    and file names are unique then we don't need to rename the original
+    table to a temporary name during the rename phase
+
+    File names are unique if engine changed and
+    - Either new or old engine does not store the table in files
+    - Neither old or new engine uses files from another engine
+      The above is mainly true for the sequence and the partition engine.
+  */
+  engine_changed= ((new_table->file->ht != table->file->ht) &&
+                   (((!(new_table->file->ha_table_flags() & HA_FILE_BASED) ||
+                      !(table->file->ha_table_flags() & HA_FILE_BASED))) ||
+                    (!(table->file->ha_table_flags() & HA_REUSES_FILE_NAMES) &&
+                     !(new_table->file->ha_table_flags() &
+                       HA_REUSES_FILE_NAMES))));
+
+  /*
     Close the intermediate table that will be the new table, but do
     not delete it! Even though MERGE tables do not have their children
     attached here it is safe to call THD::drop_temporary_table().
@@ -10599,13 +10620,21 @@ do_continue:;
   /*
     Rename the old table to temporary name to have a backup in case
     anything goes wrong while renaming the new table.
+    We only have to do this if name of the table is not changed.
+    If we are changing to use another table handler, we don't
+    have to do the rename as the table names will not interfer.
   */
   char backup_name_buff[FN_LEN];
   LEX_CSTRING backup_name;
   backup_name.str= backup_name_buff;
 
-  backup_name.length= my_snprintf(backup_name_buff, sizeof(backup_name_buff),
-                                  "%s2-%lx-%lx", tmp_file_prefix,
+  DBUG_PRINT("info", ("is_table_renamed: %d  engine_changed: %d",
+                      alter_ctx.is_table_renamed(), engine_changed));
+
+  if (!alter_ctx.is_table_renamed())
+  {
+    backup_name.length= my_snprintf(backup_name_buff, sizeof(backup_name_buff),
+                                    "%s2_%lx_%lx", tmp_file_prefix,
                                     current_pid, (long) thd->thread_id);
     if (lower_case_table_names)
       my_casedn_str(files_charset_info, backup_name_buff);
@@ -10622,10 +10651,8 @@ do_continue:;
   }
   else
   {
-    // Rename to temporary name failed, delete the new table, abort ALTER.
-    (void) quick_rm_table(thd, new_db_type, &alter_ctx.new_db,
-                          &alter_ctx.tmp_name, FN_IS_TMP);
-    goto err_with_mdl;
+    /* The original table is the backup */
+    backup_name= alter_ctx.table_name;
   }
 
   // Rename the new table to the correct name.
@@ -10676,7 +10703,19 @@ do_continue:;
   }
 
   // ALTER TABLE succeeded, delete the backup of the old table.
-  if (quick_rm_table(thd, old_db_type, &alter_ctx.db, &backup_name, FN_IS_TMP))
+  error= quick_rm_table(thd, old_db_type, &alter_ctx.db, &backup_name,
+                        FN_IS_TMP |
+                        (engine_changed ? NO_HA_TABLE | NO_PAR_TABLE: 0));
+  if (engine_changed)
+  {
+    /* the .frm file was removed but not the original table */
+    error|= quick_rm_table(thd, old_db_type, &alter_ctx.db,
+                           &alter_ctx.table_name,
+                           NO_FRM_RENAME |
+                           (engine_changed ? 0 : FN_IS_TMP));
+  }
+
+  if (error)
   {
     /*
       The fact that deletion of the backup failed is not critical
@@ -10741,6 +10780,7 @@ end_temporary:
   DBUG_RETURN(false);
 
 err_new_table_cleanup:
+  DBUG_PRINT("error", ("err_new_table_cleanup"));
   my_free(const_cast<uchar*>(frm.str));
   /*
     No default value was provided for a DATE/DATETIME field, the
@@ -10792,11 +10832,16 @@ err_new_table_cleanup:
   DBUG_RETURN(true);
 
 err_with_mdl_after_alter:
+  DBUG_PRINT("error", ("err_with_mdl_after_alter"));
   /* the table was altered. binlog the operation */
   DBUG_ASSERT(!(mysql_bin_log.is_open() &&
                 thd->is_current_stmt_binlog_format_row() &&
                 (create_info->tmp_table())));
-  write_bin_log(thd, true, thd->query(), thd->query_length());
+  /*
+    We can't reset error as we will return 'true' below and the server
+    expects that error is set
+  */
+  write_bin_log(thd, FALSE, thd->query(), thd->query_length());
 
 err_with_mdl:
   /*
