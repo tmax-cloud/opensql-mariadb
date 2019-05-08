@@ -1492,8 +1492,6 @@ public:
     bool commit_inplace_alter_table(TABLE *altered_table,
                                     Alter_inplace_info *ha_alter_info,
                                     bool commit) override;
-    void notify_table_changed() override;
-
   /*
     -------------------------------------------------------------------------
     MODULE tablespace support
