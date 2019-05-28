@@ -1,0 +1,142 @@
+# C/C++ with GCC
+# Build your C/C++ project with GCC using make.
+# Add steps that publish test results, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/apps/c-cpp/gcc
+
+resources:
+    containers:
+
+    - container: rhel-6
+      image: mariadbe.azurecr.io/build-es:rhel-6
+      endpoint: acr-mariadbe-connection
+      options: --shm-size 12G
+
+    - container: rhel-7
+      image: mariadbe.azurecr.io/build-es:rhel-7
+      endpoint: acr-mariadbe-connection
+      options: --shm-size 12G
+
+    - container: rhel-8
+      image: mariadbe.azurecr.io/build-es:rhel-8
+      endpoint: acr-mariadbe-connection
+      options: --shm-size 12G
+
+    - container: sles-12
+      image: mariadbe.azurecr.io/build-es:sles-12
+      endpoint: acr-mariadbe-connection
+      options: --shm-size 12G
+
+    - container: sles-15
+      image: mariadbe.azurecr.io/build-es:sles-15
+      endpoint: acr-mariadbe-connection
+      options: --shm-size 12G
+
+    - container: ubuntu-1604
+      image: mariadbe.azurecr.io/build-es:ubuntu-1604
+      endpoint: acr-mariadbe-connection
+      options: --shm-size 12G
+
+    - container: ubuntu-1804
+      image: mariadbe.azurecr.io/build-es:ubuntu-1804
+      endpoint: acr-mariadbe-connection
+      options: --shm-size 12G
+
+    - container: ubuntu-2004
+      image: mariadbe.azurecr.io/build-es:ubuntu-2004
+      endpoint: acr-mariadbe-connection
+      options: --shm-size 12G
+
+    - container: debian-8
+      image: mariadbe.azurecr.io/build-es:debian-8
+      endpoint: acr-mariadbe-connection
+      options: --shm-size 12G
+
+    - container: debian-9
+      image: mariadbe.azurecr.io/build-es:debian-9
+      endpoint: acr-mariadbe-connection
+      options: --shm-size 12G
+
+    - container: debian-10
+      image: mariadbe.azurecr.io/build-es:debian-10
+      endpoint: acr-mariadbe-connection
+      options: --shm-size 12G
+
+variables:
+- group: enterprise-server-variables
+- name: configuration
+  value: RelWithDebInfo
+- name: platform
+  value: x64
+- name: BUILDDIR
+  value: "MariaDB-Enterprise"
+- name: TEST_RESULTS_FILE
+  value: 'test-results.log'
+- name: MYSQL_VARDIR
+  value: '/var/tmp/mtr'
+- name: VERSION
+  value: '10.4'
+#
+stages:
+
+- stage: BuildPackages_Stage0
+
+  jobs:
+
+  - template: azure/stage0/build-source-tarball.yml
+  - template: azure/stage0/build-windows-packages.yml
+    parameters:
+      Artifact: Release
+      BuildType: RelWithDebInfo
+
+#################################
+########## STAGE 0 END ##########
+#################################
+
+
+#################################
+######### STAGE 1 BEGIN #########
+#################################
+
+- stage: TestPackages_Stage1
+  dependsOn: BuildPackages_Stage0
+  condition: succeededOrFailed()
+
+  jobs:
+
+  - job: TestMSI_Quick
+    timeoutInMinutes: 10
+    pool:
+      vmImage: 'windows-2019'
+
+    steps:
+
+    - checkout: none
+    - task: DownloadBuildArtifacts@0
+      inputs:
+        buildType: 'current'
+        specificBuildWithTriggering: true
+        downloadType: 'single'
+        artifactName: Windows-Release
+        downloadPath: '$(System.ArtifactsDirectory)'
+
+    - powershell: |
+        Set-PSDebug -Trace 1
+        $MSI=(Get-Childitem -Path $(System.ArtifactsDirectory)\Windows-Release -Filter *.msi).fullname
+        Start-Process msiexec.exe -Wait -ArgumentList "/I $MSI PASSWORD=tESt123%_password SERVICENAME=MariaDB-Enterprise /qn /l*v .\msi-install-log.txt"
+        Get-Content -Path .\msi-install-log.txt
+      displayName: "Install Windows MSI package"
+
+    - powershell: |
+        $ProgramFilesPath = [Environment]::GetEnvironmentVariable("ProgramW6432")
+        Get-Childitem -Path $ProgramFilesPath -Recurse -Filter mysql.exe
+      displayName: "Print mysql.exe location"
+      failOnStderr: false
+      ignoreLASTEXITCODE: true
+      errorActionPreference: silentlyContinue
+
+    - template: azure/tests/win-select-insert.yml
+#
+#################################
+########## STAGE 1 END ##########
+#################################
+#

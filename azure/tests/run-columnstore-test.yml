@@ -1,0 +1,78 @@
+parameters:
+  MtrArgs: ''
+  TestName: 'ColumnStore MTR Test'
+  tarname: ''
+  Artifact: Release
+
+steps:
+  - bash: |
+      set -x
+
+      # Quick installer will fail if MariaDB is running
+      if [ -e /etc/init.d/mysql ] ; then
+        sudo etc/init.d/mysql stop
+      else
+        sudo systemctl stop mariadb
+      fi
+
+      sudo quick_installer_single_server.sh
+
+      # Give ColumnStore enough time to fully start
+      DELAY=10
+      for i in {0..24}; do
+        STATUS=$(/usr/bin/mcsadmin getsystemi | grep pm1 | grep -v ACTIVE)
+        if [[ -z "${STATUS}" ]]; then
+          echo "Spent " $(($i * $DELAY)) "seconds to become active"
+          exit 0
+        else
+          echo
+          echo "${STATUS}"
+          echo
+          sleep ${DELAY}
+        fi
+      done
+      exit 1
+
+    displayName: "Start ColumnStore"
+    condition: ne(variables['poolName'], 'rhel-6')
+
+  - bash: |
+      set -x
+      cd $(Build.SourcesDirectory)
+      [[ -d bin ]] && export PATH="$(Build.SourcesDirectory)/bin:${PATH}"
+
+      if [[ -d mysql-test ]]; then
+        MYSQLTEST=$(Build.SourcesDirectory)/mysql-test
+      else
+        MYSQLTEST=$(find /usr/share -type d -name 'mysql-test' ||:)
+      fi
+
+      if [[ -z "${MYSQLTEST}" ]]; then
+        echo "- mysql-test directory doesn't exist after PKG installation!"
+        exit 1
+      else
+        sudo chown -R ${USER} "${MYSQLTEST}"
+      fi
+
+      mkdir -p "${MYSQL_VARDIR}"
+      sudo chmod -R 777 "${MYSQL_VARDIR}"
+      cd "${MYSQLTEST}"
+      exec perl mysql-test-run.pl ${{ parameters.MtrArgs }}
+
+    displayName: "MTR - ${{ parameters.TestName }}"
+    condition: and(ne(variables['poolName'], 'rhel-6'), succeededOrFailed())
+
+  - bash: |
+      set -x
+      ls -la '$(Build.ArtifactStagingDirectory)'
+      rm -frv '$(Build.ArtifactStagingDirectory)'/*
+      mkdir -p '$(Build.ArtifactStagingDirectory)'/MTR-Results
+      sudo tar czvf '$(Build.ArtifactStagingDirectory)'/MTR-Results/${{ parameters.tarname }} ${MYSQL_VARDIR}/* /var/log/mariadb/columnstore
+    displayName: 'Archive mysql vardir'
+    condition: and(ne(variables['poolName'], 'rhel-6'), failed())
+
+  - task: PublishBuildArtifacts@1
+    condition: and(ne(variables['poolName'], 'rhel-6'), failed())
+    inputs:
+      pathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      artifactName: $(poolName)-MTR-columnstore
