@@ -90,6 +90,7 @@
 #define IGNORE_DATA 0x01 /* don't dump data for this table */
 #define IGNORE_INSERT_DELAYED 0x02 /* table doesn't support INSERT DELAYED */
 #define IGNORE_SEQUENCE_TABLE 0x04 /* catch the SEQUENCE*/
+#define IGNORE_S3_TABLE 0x08
 
 /* Chars needed to store LONGLONG, excluding trailing '\0'. */
 #define LONGLONG_LEN 20
@@ -113,6 +114,7 @@ static my_bool  verbose= 0, opt_no_create_info= 0, opt_no_data= 0, opt_no_data_m
                 quick= 1, extended_insert= 1,
                 lock_tables=1,ignore_errors=0,flush_logs=0,flush_privileges=0,
                 opt_drop=1,opt_keywords=0,opt_lock=1,opt_compress=0,
+                opt_copy_s3_tables=0,
                 opt_delayed=0,create_options=1,opt_quoted=0,opt_databases=0,
                 opt_alldbs=0,opt_create_db=0,opt_lock_all_tables=0,
                 opt_set_charset=0, opt_dump_date=1,
@@ -300,6 +302,11 @@ static struct my_option my_long_options[] =
    NO_ARG, 0, 0, 0, 0, 0, 0},
   {"compress", 'C', "Use compression in server/client protocol.",
    &opt_compress, &opt_compress, 0, GET_BOOL, NO_ARG, 0, 0, 0,
+   0, 0, 0},
+  {"copy_s3_tables", OPT_COPY_S3_TABLES,
+   "If 'no' S3 tables will be ignored, otherwise S3 tables will be copied as "
+   " Aria tables and then altered to S3",
+   &opt_copy_s3_tables, &opt_copy_s3_tables, 0, GET_BOOL, NO_ARG, 0, 0, 0,
    0, 0, 0},
   {"create-options", 'a',
    "Include all MariaDB specific create options.",
@@ -2291,7 +2298,12 @@ static void print_xml_row(FILE *xml_file, const char *row_name,
         fputc(' ', xml_file);
         print_quoted_xml(xml_file, field->name, field->name_length, 1);
         fputs("=\"", xml_file);
-        print_quoted_xml(xml_file, (*row)[i], lengths[i], 0);
+        if (opt_copy_s3_tables &&
+            !strcmp(field->name, "Engine") &&
+            !strcmp((*row)[i], "S3"))
+          print_quoted_xml(xml_file, "Aria", sizeof("Aria") - 1, 0);
+        else
+          print_quoted_xml(xml_file, (*row)[i], lengths[i], 0);
         fputc('"', xml_file);
         check_io(xml_file);
       }
@@ -2948,10 +2960,17 @@ static uint get_table_structure(const char *table, const char *db, char *table_t
   my_bool    is_log_table;
   MYSQL_RES  *result;
   MYSQL_ROW  row;
+  const char *s3_engine_ptr;
+  DYNAMIC_STRING create_table_str;
+  static const char s3_engine_token[]= " ENGINE=S3 ";
+  static const char aria_engine_token[]= " ENGINE=Aria ";
   DBUG_ENTER("get_table_structure");
   DBUG_PRINT("enter", ("db: %s  table: %s", db, table));
 
   *ignore_flag= check_if_ignore_table(table, table_type);
+
+  if (!opt_copy_s3_tables && *ignore_flag == IGNORE_S3_TABLE)
+    DBUG_RETURN(0);
 
   delayed= opt_delayed;
   if (delayed && (*ignore_flag & IGNORE_INSERT_DELAYED))
@@ -3186,11 +3205,22 @@ static uint get_table_structure(const char *table, const char *db, char *table_t
       is_log_table= general_log_or_slow_log_tables(db, table);
       if (is_log_table)
         row[1]+= 13; /* strlen("CREATE TABLE ")= 13 */
+      create_table_str.str= row[1];
+      if (opt_copy_s3_tables && (*ignore_flag & IGNORE_S3_TABLE) &&
+          (s3_engine_ptr= strstr(row[1], s3_engine_token)))
+      {
+        init_dynamic_string_checked(&create_table_str, "", 1024, 1024);
+        dynstr_append_mem_checked(&create_table_str, row[1],
+          (uint)(s3_engine_ptr - row[1]));
+        dynstr_append_checked(&create_table_str, aria_engine_token);
+        dynstr_append_checked(&create_table_str,
+          s3_engine_ptr + sizeof(s3_engine_token) - 1);
+      }
       if (opt_compatible_mode & 3)
       {
         fprintf(sql_file,
                 is_log_table ? "CREATE TABLE IF NOT EXISTS %s;\n" : "%s;\n",
-                row[1]);
+                create_table_str.str);
       }
       else
       {
@@ -3200,10 +3230,12 @@ static uint get_table_structure(const char *table, const char *db, char *table_t
                 "%s%s;\n"
                 "/*!40101 SET character_set_client = @saved_cs_client */;\n",
                 is_log_table ? "CREATE TABLE IF NOT EXISTS " : "",
-                row[1]);
+                create_table_str.str);
       }
 
       check_io(sql_file);
+      if (create_table_str.str != row[1])
+        dynstr_free(&create_table_str);
       mysql_free_result(result);
     }
     my_snprintf(query_buff, sizeof(query_buff), "show fields from %s",
@@ -3902,6 +3934,14 @@ static void dump_table(const char *table, const char *db, const uchar *hash_key,
   if (strcmp(table_type, "VIEW") == 0)
     DBUG_VOID_RETURN;
 
+  if (!opt_copy_s3_tables && (ignore_flag & IGNORE_S3_TABLE))
+  {
+    verbose_msg("-- Skipping dump data for table '%s', "
+                " this is S3 table and --copy-s3-tables=0\n",
+                table);
+    DBUG_VOID_RETURN;
+  }
+
   /* Check --no-data flag */
   if (opt_no_data || (hash_key && ignore_table_data(hash_key, len)))
   {
@@ -4329,6 +4369,15 @@ static void dump_table(const char *table, const char *db, const uchar *hash_key,
         fputs("\t</table_data>\n", md_result_file);
     else if (extended_insert && row_break)
       fputs(";\n", md_result_file);             /* If not empty table */
+    if (!opt_xml && opt_copy_s3_tables && (ignore_flag & IGNORE_S3_TABLE))
+    {
+      DYNAMIC_STRING alter_string;
+      init_dynamic_string_checked(&alter_string, "ATER TABLE ", 1024, 1024);
+      dynstr_append_checked(&alter_string, opt_quoted_table);
+      dynstr_append_checked(&alter_string, " ENGINE=S3;\n");
+      fputs(alter_string.str, md_result_file);
+      dynstr_free(&alter_string);
+    }
     fflush(md_result_file);
     check_io(md_result_file);
     if (mysql_errno(mysql))
@@ -6385,6 +6434,10 @@ char check_if_ignore_table(const char *table_name, char *table_type)
     }
     if (!strcmp(row[1],"SEQUENCE"))
       result|= IGNORE_SEQUENCE_TABLE;
+
+    if (!strcmp(table_type, "S3"))
+       result|= IGNORE_S3_TABLE;
+
     /*
       If these two types, we do want to skip dumping the table
     */
