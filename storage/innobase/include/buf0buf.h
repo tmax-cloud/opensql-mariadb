@@ -1516,6 +1516,13 @@ public:
 					zip.data == NULL means an active
 					buf_pool->watch */
 
+	/** whether the page will be (re)initialized at the time it will
+	be written to the file, that is, whether the doublewrite buffer
+	can be safely skipped. Protected under similar conditions as
+	buf_block_t::frame. Can be set while holding buf_block_t::lock
+	X-latch and reset during page flush, while io_fix is in effect. */
+	bool		init_on_flush;
+
 	ulint           real_size;	/*!< Real size of the page
 					Normal pages == srv_page_size
 					page compressed pages, payload

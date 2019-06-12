@@ -1523,7 +1523,7 @@ btr_page_reorganize_low(
 	}
 
 	if (page_zip
-	    && !page_zip_compress(page_zip, page, index, z_level, mtr)) {
+	    && !page_zip_compress(block, index, z_level, mtr)) {
 
 		/* Restore the old page and exit. */
 #if defined UNIV_DEBUG || defined UNIV_ZIP_DEBUG
@@ -1982,7 +1982,7 @@ btr_root_raise_and_insert(
 		ut_a(new_page_zip);
 
 		/* Copy the page byte for byte. */
-		page_zip_copy_recs(new_page_zip, new_page,
+		page_zip_copy_recs(new_block,
 				   root_page_zip, root, index, mtr);
 
 		/* Update the lock table and possible hash index. */
@@ -3058,7 +3058,7 @@ insert_empty:
 			as appropriate.  Deleting will always succeed. */
 			ut_a(new_page_zip);
 
-			page_zip_copy_recs(new_page_zip, new_page,
+			page_zip_copy_recs(new_block,
 					   page_zip, page, cursor->index, mtr);
 			page_delete_rec_list_end(move_limit - page + new_page,
 						 new_block, cursor->index,
@@ -3101,7 +3101,7 @@ insert_empty:
 			as appropriate.  Deleting will always succeed. */
 			ut_a(new_page_zip);
 
-			page_zip_copy_recs(new_page_zip, new_page,
+			page_zip_copy_recs(new_block,
 					   page_zip, page, cursor->index, mtr);
 			page_delete_rec_list_start(move_limit - page
 						   + new_page, new_block,
@@ -3381,7 +3381,6 @@ btr_lift_page_up(
 	mtr_t*		mtr)	/*!< in: mtr */
 {
 	buf_block_t*	father_block;
-	page_t*		father_page;
 	ulint		page_level;
 	page_zip_des_t*	father_page_zip;
 	page_t*		page		= buf_block_get_frame(block);
@@ -3418,7 +3417,6 @@ btr_lift_page_up(
 		}
 		father_block = btr_cur_get_block(&cursor);
 		father_page_zip = buf_block_get_page_zip(father_block);
-		father_page = buf_block_get_frame(father_block);
 
 		n_blocks = 0;
 
@@ -3466,7 +3464,6 @@ btr_lift_page_up(
 
 			father_block = blocks[0];
 			father_page_zip = buf_block_get_page_zip(father_block);
-			father_page = buf_block_get_frame(father_block);
 		}
 
 		mem_heap_free(heap);
@@ -3501,7 +3498,7 @@ btr_lift_page_up(
 		ut_a(page_zip);
 
 		/* Copy the page byte for byte. */
-		page_zip_copy_recs(father_page_zip, father_page,
+		page_zip_copy_recs(father_block,
 				   page_zip, page, index, mtr);
 
 		/* Update the lock table and possible hash index. */
@@ -3554,7 +3551,7 @@ btr_lift_page_up(
 	    && !index->table->is_temporary()) {
 		ibuf_reset_free_bits(father_block);
 	}
-	ut_ad(page_validate(father_page, index));
+	ut_ad(page_validate(father_block->frame, index));
 	ut_ad(btr_check_node_ptr(index, father_block, mtr));
 
 	return(lift_father_up ? block_orig : father_block);

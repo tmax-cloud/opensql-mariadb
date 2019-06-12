@@ -1039,7 +1039,10 @@ buf_flush_write_block_low(
 
 	ut_ad(space->purpose == FIL_TYPE_TABLESPACE
 	      || space->atomic_write_supported);
-	if (!space->use_doublewrite()) {
+	const bool use_doublewrite = !bpage->init_on_flush
+		&& space->use_doublewrite();
+
+	if (!use_doublewrite) {
 		ulint	type = IORequest::WRITE | IORequest::DO_NOT_WAKE;
 
 		IORequest	request(type, bpage);
@@ -1080,7 +1083,7 @@ buf_flush_write_block_low(
 #endif
 		/* true means we want to evict this page from the
 		LRU list as well. */
-		buf_page_io_complete(bpage, space->use_doublewrite(), true);
+		buf_page_io_complete(bpage, use_doublewrite, true);
 
 		ut_ad(err == DB_SUCCESS);
 	}
