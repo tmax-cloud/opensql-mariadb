@@ -1,7 +1,7 @@
 # Galera cache encryption
-# Restart test #3: start both nodes encryption enabled
-# and restart node_2 with different key file and finally
-# restart node_2 with original key file.
+# Restart test 2: Here servers are started with encryption enabled.
+# Then node_2 is restarted with encryption disabled and finally
+# node_2 is restarted with encryption enabled.
 
 --source include/galera_cluster.inc
 --source include/have_innodb.inc
@@ -52,7 +52,7 @@ show variables like 'encrypt_binlog';
 --let SEARCH_FILE= $MYSQLD_DATADIR_2/galera.cache
 --source include/search_pattern_in_file.inc
 
---echo # Restart node 2 and change the key file
+--echo # Restart node 2 and disable encrypt-binlog
 
 --connection node_2
 --source include/shutdown_mysqld.inc
@@ -64,7 +64,7 @@ show variables like 'encrypt_binlog';
        open(OUT, ">","$ENV{MYSQLTEST_VARDIR}/my.cnf");
        while(<IN>)
        {
-          s/galera_encryption.key/galera_encryption_2.key/g;
+          s/encrypt-binlog=1/encrypt-binlog=0/g;
           print OUT $_;
        }
        close(IN);
@@ -77,7 +77,7 @@ EOF
 
 show variables like 'encrypt_binlog';
 
-INSERT INTO encryption values (2, 'YetAnymoreSecret');
+INSERT INTO encryption values (2, 'NotAnymoreSecret');
 
 --let SEARCH_PATTERN= CREATE TABLE encryption\(a INT\)
 
@@ -92,7 +92,7 @@ INSERT INTO encryption values (2, 'YetAnymoreSecret');
 --let SEARCH_FILE= $MYSQLD_DATADIR_2/galera.cache
 --source include/search_pattern_in_file.inc
 
---let SEARCH_PATTERN= YetAnymoreSecret
+--let SEARCH_PATTERN= NotAnymoreSecret
 --let SEARCH_FILE= $MYSQLD_DATADIR_2/galera.page.00000*
 --source include/search_pattern_in_file.inc
 
@@ -120,14 +120,14 @@ INSERT INTO encryption values (2, 'YetAnymoreSecret');
 --let SEARCH_FILE= $MYSQLD_DATADIR_1/galera.cache
 --source include/search_pattern_in_file.inc
 
---let SEARCH_PATTERN= YetAnymoreSecret
+--let SEARCH_PATTERN= NotAnymoreSecret
 --let SEARCH_FILE= $MYSQLD_DATADIR_1/galera.page.00000*
 --source include/search_pattern_in_file.inc
 
 --let SEARCH_FILE= $MYSQLD_DATADIR_1/galera.cache
 --source include/search_pattern_in_file.inc
 
---echo # Restart node 2 and change key file back
+--echo # Restart node 2 and enable encrypt-binlog
 
 --connection node_2
 --source include/shutdown_mysqld.inc
@@ -139,7 +139,7 @@ INSERT INTO encryption values (2, 'YetAnymoreSecret');
        open(OUT, ">","$ENV{MYSQLTEST_VARDIR}/my.cnf");
        while(<IN>)
        {
-          s/galera_encryption_2.key/galera_encryption.key/g;
+          s/encrypt-binlog=0/encrypt-binlog=1/g;
           print OUT $_;
        }
        close(IN);
@@ -167,7 +167,7 @@ INSERT INTO encryption values (3, 'AgainMoreSecret');
 --let SEARCH_FILE= $MYSQLD_DATADIR_2/galera.cache
 --source include/search_pattern_in_file.inc
 
---let SEARCH_PATTERN= YetAnymoreSecret
+--let SEARCH_PATTERN= NotAnymoreSecret
 --let SEARCH_FILE= $MYSQLD_DATADIR_2/galera.page.00000*
 --source include/search_pattern_in_file.inc
 
