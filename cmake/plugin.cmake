@@ -75,7 +75,12 @@ MACRO(MYSQL_ADD_PLUGIN)
       SET(compat "with${compat}")
     ENDIF()
 
-    IF (ARG_DISABLED)
+    # check if plugin is on the list of the plugins that shouldn't be compiled
+    LIST (FIND PLUGINS_DONT_COMPILE ${plugin} _index)
+
+    IF (${_index} GREATER -1)
+      SET(howtobuild NO)
+    ELSEIF (ARG_DISABLED)
       SET(howtobuild NO)
     ELSEIF (compat STREQUAL ".")
       SET(howtobuild DYNAMIC)
@@ -217,10 +222,12 @@ MACRO(MYSQL_ADD_PLUGIN)
 
     SET_TARGET_PROPERTIES(${target} PROPERTIES 
       OUTPUT_NAME "${ARG_MODULE_OUTPUT_NAME}")  
+
+    LIST (FIND PLUGINS_NOT_SUPPORTED ${target} not_supported)
+
     # Install dynamic library
-    IF(ARG_COMPONENT)
-      IF(CPACK_COMPONENTS_ALL AND
-         NOT CPACK_COMPONENTS_ALL MATCHES ${ARG_COMPONENT}
+    IF(ARG_COMPONENT AND CPACK_COMPONENTS_ALL)
+      IF(NOT CPACK_COMPONENTS_ALL MATCHES ${ARG_COMPONENT}
          AND INSTALL_SYSCONF2DIR)
         IF (ARG_STORAGE_ENGINE)
           SET(ver " = %{version}-%{release}")
@@ -239,16 +246,24 @@ MACRO(MYSQL_ADD_PLUGIN)
             SET(ARG_CONFIG "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${target}.cnf")
             FILE(WRITE ${ARG_CONFIG} "[mariadb]\nplugin-load-add=${ARG_MODULE_OUTPUT_NAME}.so\n")
           ENDIF()
-          INSTALL(FILES ${ARG_CONFIG} COMPONENT ${ARG_COMPONENT} DESTINATION ${INSTALL_SYSCONF2DIR})
-          SET(CPACK_RPM_${ARG_COMPONENT}_USER_FILELIST ${ignored} "%config(noreplace) ${INSTALL_SYSCONF2DIR}/*" PARENT_SCOPE)
-          SET(CPACK_RPM_${ARG_COMPONENT}_POST_INSTALL_SCRIPT_FILE ${CMAKE_SOURCE_DIR}/support-files/rpm/plugin-postin.sh PARENT_SCOPE)
-          SET(CPACK_RPM_${ARG_COMPONENT}_POST_TRANS_SCRIPT_FILE ${CMAKE_SOURCE_DIR}/support-files/rpm/server-posttrans.sh PARENT_SCOPE)
+          IF (NOT not_supported GREATER -1)
+            INSTALL(FILES ${ARG_CONFIG} COMPONENT ${ARG_COMPONENT} DESTINATION ${INSTALL_SYSCONF2DIR})
+            SET(CPACK_RPM_${ARG_COMPONENT}_USER_FILELIST ${ignored} "%config(noreplace) ${INSTALL_SYSCONF2DIR}/*" PARENT_SCOPE)
+            SET(CPACK_RPM_${ARG_COMPONENT}_POST_INSTALL_SCRIPT_FILE ${CMAKE_SOURCE_DIR}/support-files/rpm/plugin-postin.sh PARENT_SCOPE)
+            SET(CPACK_RPM_${ARG_COMPONENT}_POST_TRANS_SCRIPT_FILE ${CMAKE_SOURCE_DIR}/support-files/rpm/server-posttrans.sh PARENT_SCOPE)
+          ENDIF()
         ENDIF()
       ENDIF()
     ELSE()
       SET(ARG_COMPONENT Server)
     ENDIF()
-    MYSQL_INSTALL_TARGETS(${target} DESTINATION ${INSTALL_PLUGINDIR} COMPONENT ${ARG_COMPONENT})
+
+    IF (not_supported GREATER -1 AND ARG_COMPONENT STREQUAL Server)
+      SET(plugindir "${INSTALL_MYSQLSHAREDIR}/not_supported")
+    ELSE()
+      SET(plugindir ${INSTALL_PLUGINDIR})
+    ENDIF()
+    MYSQL_INSTALL_TARGETS(${target} DESTINATION ${plugindir} COMPONENT ${ARG_COMPONENT})
   ENDIF()
 
   GET_FILENAME_COMPONENT(subpath ${CMAKE_CURRENT_SOURCE_DIR} NAME)
@@ -260,7 +275,7 @@ MACRO(MYSQL_ADD_PLUGIN)
 ENDMACRO()
 
 
-# Add all CMake projects under storage  and plugin 
+# Add all CMake projects under storage and plugin 
 # subdirectories, configure sql_builtins.cc
 MACRO(CONFIGURE_PLUGINS)
   IF(NOT WITHOUT_SERVER)
@@ -275,10 +290,12 @@ MACRO(CONFIGURE_PLUGINS)
   ENDFOREACH()
 
   GET_CMAKE_PROPERTY(ALL_VARS VARIABLES)
+
   FOREACH (V ${ALL_VARS})
     IF (V MATCHES "^PLUGIN_" AND ${V} MATCHES "YES")
       STRING(SUBSTRING ${V} 7 -1 plugin)
       STRING(TOLOWER ${plugin} target)
+
       IF (NOT TARGET ${target})
         MESSAGE(FATAL_ERROR "Plugin ${plugin} cannot be built")
       ENDIF()
