@@ -176,10 +176,10 @@ IF(CMAKE_GENERATOR MATCHES "Visual Studio")
  SET(CONFIG_PARAM "-DCMAKE_INSTALL_CONFIG_NAME=${CMAKE_CFG_INTDIR}")
 ENDIF()
 
-IF(MSVC_CRT_TYPE MATCHES "/MD")
+IF((MSVC_CRT_TYPE MATCHES "/MD") OR DYNAMIC_UCRT_LINK)
   # Find out CRT merge module path, we're going to use it in installer
   # The path  and name depends on VS version
-  IF(MSVC_VERSION LESS 1900)
+  IF(MSVC_VERSION LESS 1910)
     # VS2015
     SET(VCREDIST_MSM_FILENAME Microsoft_VC140_CRT_${WIX_ARCH_SUFFIX}.msm)
     SET(ProgramFilesX86 "ProgramFiles(x86)")
@@ -245,6 +245,7 @@ ADD_CUSTOM_TARGET(
     -DWITH_THIRD_PARTY="${WITH_THIRD_PARTY}"
     -DWIXCA_LOCATION="$<TARGET_FILE:wixca>"
     -DMSVC_CRT_TYPE="${MSVC_CRT_TYPE}"
+    -DDYNAMIC_UCRT_LINK="${DYNAMIC_UCRT_LINK}"
     -DVCRedist_MSM="${VCRedist_MSM}"
     -P  ${CMAKE_CURRENT_SOURCE_DIR}/create_msi.cmake
 )
