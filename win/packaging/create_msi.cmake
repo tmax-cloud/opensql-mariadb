@@ -65,7 +65,7 @@ ENDIF()
 IF((MSVC_CRT_TYPE MATCHES "/MD") AND (NOT VCRedist_MSM))
   # Something was wrong, we package VC runtime merge modules
   # when compiled with dynamic C runtime.
-  MESSAGE(FATAL_ERROR "Redistributable merge module was not found")
+  # MESSAGE(FATAL_ERROR "Redistributable merge module was not found")
 ENDIF()
 
 SET(COMPONENTS_ALL "${CPACK_COMPONENTS_ALL}")
