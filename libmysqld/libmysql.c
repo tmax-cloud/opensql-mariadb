@@ -5033,7 +5033,7 @@ uint8_t ms3_move(ms3_st *ms3, const char *source_bucket, const char *source_key,
   return 1;
 }
 
-void ms3_debug(bool state)
+void ms3_debug()
 {
 }
 
