@@ -5780,6 +5780,7 @@ bool mysql_create_like_table(THD* thd, TABLE_LIST* table,
   int res= 1;
   bool is_trans= FALSE;
   bool do_logging= FALSE;
+  bool src_table_exists= FALSE;
   uint not_used;
   int create_res;
   DBUG_ENTER("mysql_create_like_table");
@@ -5810,6 +5811,7 @@ bool mysql_create_like_table(THD* thd, TABLE_LIST* table,
   {
     /* is_error() may be 0 if table existed and we generated a warning */
     res= thd->is_error();
+    src_table_exists= !res;
     goto err;
   }
   /* Ensure we don't try to create something from which we select from */
@@ -6096,7 +6098,7 @@ err:
       res= 1;
     }
   }
-  if (!res)
+  if (!res && !src_table_exists)
   {
     if (!create_info->tmp_table())
     {

@@ -1,3 +1,4 @@
+CREATE TABLE t_exists (a INT);
 connect  con1,localhost,root,,;
 BACKUP STAGE START;
 connection default;
@@ -150,6 +151,12 @@ create table mysqltest.t91 (a int primary key, b int) engine=innodb;
 alter database mysqltest character set utf8;
 drop database mysqltest;
 #
+# MENT-222 bug testing
+#
+CREATE TABLE IF NOT EXISTS t_exists LIKE x;
+Warnings:
+Note	1050	Table 't_exists' already exists
+#
 # Reading backup ddl log file
 #
 CREATE,MyISAM,0,test,t1,id: 1,,0,,,
@@ -229,4 +236,5 @@ DROP,DATABASE,0,mysqltest,,,,0,,,
 #
 # Cleanup
 #
+DROP TABLE t_exists;
 disconnect con1;
