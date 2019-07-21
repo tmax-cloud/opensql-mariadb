@@ -7863,7 +7863,7 @@ ER_VERS_PERIOD_COLUMNS
         eng "PERIOD FOR SYSTEM_TIME must use columns %`s and %`s"
 
 ER_PART_WRONG_VALUE
-        eng "Wrong parameters for partitioned %`s: wrong value for '%s'"
+        eng "Wrong parameters for partitioned %`s: wrong value for %s"
 
 ER_VERS_WRONG_PARTS
         eng "Wrong partitions for %`s: must have at least one HISTORY and exactly one last CURRENT"
@@ -7992,3 +7992,5 @@ ER_REMOVED_ORPHAN_TRIGGER
         eng "Dropped orphan trigger '%-.64s', originally created for table: '%-.192s'"
 ER_STORAGE_ENGINE_DISABLED
         eng "Storage engine %s is disabled"
+ER_VERS_HIST_PART_FAILED
+        eng "Versioned table %`s.%`s: adding HISTORY partition failed"
