@@ -43,7 +43,7 @@ TYPELIB backup_stage_names=
 { array_elements(stage_names)-1, "", stage_names, 0 };
 
 static MDL_ticket *backup_flush_ticket;
-static File backup_log= -1;
+static File volatile backup_log= -1;
 static int backup_log_error= 0;
 
 static bool backup_start(THD *thd);
@@ -452,21 +452,23 @@ static bool start_ddl_logging()
 
   fn_format(name, "ddl", mysql_data_home, ".log", 0);
 
+  backup_log_error= 0;
   backup_log= mysql_file_create(key_file_log_ddl, name, CREATE_MODE,
                                 O_TRUNC | O_WRONLY | O_APPEND | O_NOFOLLOW,
                                 MYF(MY_WME));
-  backup_log_error= 0;
   DBUG_RETURN(backup_log < 0);
 }
 
 static void stop_ddl_logging()
 {
+  mysql_mutex_lock(&LOCK_backup_log);
   if (backup_log >= 0)
   {
     mysql_file_close(backup_log, MYF(MY_WME));
     backup_log= -1;
   }
   backup_log_error= 0;
+  mysql_mutex_unlock(&LOCK_backup_log);
 }
 
 
@@ -523,6 +525,12 @@ void backup_log_ddl(backup_log_info *info)
 {
   if (backup_log >= 0 && backup_log_error == 0)
   {
+    mysql_mutex_lock(&LOCK_backup_log);
+    if (backup_log < 0)
+    {
+      mysql_mutex_unlock(&LOCK_backup_log);
+      return;
+    }
     /* Enough place for db.table *2 + query + engine_name * 2 + tabs+ uuids */
     char buff[NAME_CHAR_LEN*4+20+40*2+10+MY_UUID_STRING_LENGTH*2], *ptr= buff;
     char timebuff[20];
@@ -556,7 +564,6 @@ void backup_log_ddl(backup_log_info *info)
     ptr= add_id_to_buffer(ptr,   &info->new_table_id);
 
     ptr[-1]= '\n';                              // Replace last tab with nl
-    mysql_mutex_lock(&LOCK_backup_log);
     if (mysql_file_write(backup_log, (uchar*) buff, (size_t) (ptr-buff),
                          MYF(MY_FNABP)))
       backup_log_error= my_errno;
