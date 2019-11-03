@@ -9,5 +9,5 @@
 #  Do not use any TAB characters for whitespace.
 #
 ##############################################################################
-
 create-index-debug : MDEV-13680 InnoDB may crash when btr_page_alloc() fails
+innodb-64k-crash : MENT-454 Nov/03/2019 @abychko  Disabled until MDEV-20949
