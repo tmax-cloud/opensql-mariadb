@@ -1,10 +1,4 @@
-<<<<<<< HEAD
-connection node_2;
-connection node_1;
-||||||| merged common ancestors
-=======
 call mtr.add_suppression("WSREP has not yet prepared node for application use");
->>>>>>> 10.3
 CREATE TABLE t1 (f1 INTEGER);
 connect node_1a, 127.0.0.1, root, , test, $NODE_MYPORT_1;
 connection node_1;
