@@ -4,6 +4,7 @@
 --source include/not_embedded.inc
 
 CREATE TABLE t_exists (a INT);
+CREATE TABLE t_exists_template (a INT);
 
 connect (con1,localhost,root,,);
 BACKUP STAGE START;
@@ -26,7 +27,7 @@ drop database mysqltest;
 --echo #
 --echo # MENT-222 bug testing
 --echo #
-CREATE TABLE IF NOT EXISTS t_exists LIKE x;
+CREATE TABLE IF NOT EXISTS t_exists LIKE t_exists_template;
 
 --source include/print_ddl_log.inc
 
@@ -34,4 +35,5 @@ CREATE TABLE IF NOT EXISTS t_exists LIKE x;
 --echo # Cleanup
 --echo #
 DROP TABLE t_exists;
+DROP TABLE t_exists_template;
 disconnect con1;

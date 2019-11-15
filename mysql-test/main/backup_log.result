@@ -1,4 +1,5 @@
 CREATE TABLE t_exists (a INT);
+CREATE TABLE t_exists_template (a INT);
 connect  con1,localhost,root,,;
 BACKUP STAGE START;
 connection default;
@@ -153,7 +154,7 @@ drop database mysqltest;
 #
 # MENT-222 bug testing
 #
-CREATE TABLE IF NOT EXISTS t_exists LIKE x;
+CREATE TABLE IF NOT EXISTS t_exists LIKE t_exists_template;
 Warnings:
 Note	1050	Table 't_exists' already exists
 #
@@ -237,4 +238,5 @@ DROP,DATABASE,0,mysqltest,,,,0,,,
 # Cleanup
 #
 DROP TABLE t_exists;
+DROP TABLE t_exists_template;
 disconnect con1;
