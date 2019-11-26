@@ -2894,10 +2894,20 @@ void mysql_sql_stmt_prepare(THD *thd)
   */
   Item_change_list_savepoint change_list_savepoint(thd);
 
-  if (stmt->prepare(query.str, (uint) query.length))
+  bool res= stmt->prepare(query.str, (uint) query.length);
+  /*
+    stmt->prepare() sets thd->query_string with the prepared
+    query, so the audit plugin gets adequate notification with the
+    mysqld_stmt_* set of functions.
+    But here we should restore the original query so it's mentioned in
+    logs properly.
+  */
+  thd->set_query(orig_query);
+  if (res)
   {
     /* Statement map deletes the statement on erase */
     thd->stmt_map.erase(stmt);
+    DEBUG_SYNC(thd, "after_removing_statement");
   }
   else
   {
@@ -2906,14 +2916,6 @@ void mysql_sql_stmt_prepare(THD *thd)
   }
   change_list_savepoint.rollback(thd);
 
-  /*
-     stmt->prepare() sets thd->query_string with the prepared
-     query, so the audit plugin gets adequate notification with the
-     mysqld_stmt_* set of functions.
-     But here we should restore the original query so it's mentioned in
-     logs properly.
-   */
-  thd->set_query_inner(orig_query);
   DBUG_VOID_RETURN;
 }
 
