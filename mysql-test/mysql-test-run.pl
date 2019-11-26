@@ -2385,10 +2385,11 @@ sub setup_vardir() {
   # and make them world readable
   copytree("$glob_mysql_test_dir/std_data", "$opt_vardir/std_data", "0022");
 
+
   # create a plugin dir and copy or symlink plugins into it
-  unless($plugindir)
   {
-    if ($source_dist)
+    my $bintar= -d  "$bindir/share/not_supported/";
+    if ($source_dist or $bintar)
     {
       $plugindir="$opt_vardir/plugins";
       mkpath($plugindir);
@@ -2421,6 +2422,8 @@ sub setup_vardir() {
              <$bindir/plugin/*/auth_pam_tool_dir>,
              <$bindir/libmariadb/plugins/*/*.so>,
              <$bindir/libmariadb/*.so>,
+             <$bindir/lib/plugin/*.so>,             # bintar
+             <$bindir/share/not_supported/*.so>,    # bintar
              <$bindir/sql/*.so>)
         {
           my $pname=basename($_);
