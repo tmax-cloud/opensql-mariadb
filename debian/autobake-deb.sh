@@ -132,6 +132,15 @@ then
   sed -i -e "/usr\/lib\/mysql\/plugin\/ha_sphinx.so/d" debian/mariadb-server-10.4.install
 fi
 
+# Don't package ColumnStore if it wasn't turned on to build
+if [[ $CMAKEFLAGS != *"COLUMNSTORE=YES"* ]]
+then
+    sed -i -e "/Package: mariadb-plugin-columnstore/,/^$/d" debian/control
+    sed -i -e "/Package: mariadb-columnstore-libs/,/^$/d" debian/control
+    sed -i -e "/Package: mariadb-columnstore-platform/,/^$/d" debian/control
+fi
+
+
 # Adjust changelog, add new version
 echo "Incrementing changelog and starting build scripts"
 
