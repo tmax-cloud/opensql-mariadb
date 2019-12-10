@@ -20,3 +20,7 @@ IF (RPM)
     SET(CPACK_RPM_columnstore-engine_USER_FILELIST ${CPACK_RPM_columnstore-engine_USER_FILELIST} PARENT_SCOPE)
     SET(CPACK_RPM_columnstore-platform_PACKAGE_REQUIRES ${CPACK_RPM_columnstore-platform_PACKAGE_REQUIRES} PARENT_SCOPE)
 ENDIF ()
+
+# Tests are here and not in the engine tree (or the path thing wouldn't go so well)
+GET_FILENAME_COMPONENT(subpath ${CMAKE_CURRENT_SOURCE_DIR} NAME)
+INSTALL_MYSQL_TEST("${CMAKE_CURRENT_SOURCE_DIR}/mysql-test/" "plugin/${subpath}")
