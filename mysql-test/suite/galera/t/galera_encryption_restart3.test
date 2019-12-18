@@ -5,6 +5,7 @@
 
 --source include/galera_cluster.inc
 --source include/have_innodb.inc
+--source include/force_restart.inc
 
 call mtr.add_suppression("WSREP: GCache recovery is not supported when encryption is enabled. Recovery will be skipped.");
 
