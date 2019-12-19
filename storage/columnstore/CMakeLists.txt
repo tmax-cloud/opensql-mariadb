@@ -24,3 +24,6 @@ ENDIF ()
 # Tests are here and not in the engine tree (or the path thing wouldn't go so well)
 GET_FILENAME_COMPONENT(subpath ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 INSTALL_MYSQL_TEST("${CMAKE_CURRENT_SOURCE_DIR}/mysql-test/" "plugin/${subpath}")
+
+include(symlinks)
+CREATE_MARIADB_SYMLINK_IN_DIR(columnstore/lib/ha_columnstore.so ha_columnstore.so)

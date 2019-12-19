@@ -1,3 +1,5 @@
+INCLUDE(CMakeParseArguments)
+
 # Create lists
 if(COMMAND REGISTER_SYMLINK)
   return()
@@ -55,12 +57,14 @@ macro(CREATE_MARIADB_SYMLINK src dir comp)
   endif()
 
   if (mariadbname)
-    CREATE_MARIADB_SYMLINK_IN_DIR(${src} ${mariadbname} ${dir} ${comp})
+    CREATE_MARIADB_SYMLINK_IN_DIR(${src} ${mariadbname}
+      DESTINATION ${dir} COMPONENT ${comp})
   endif()
 endmacro(CREATE_MARIADB_SYMLINK)
 
 # Add MariaDB symlinks in directory
-macro(CREATE_MARIADB_SYMLINK_IN_DIR src dest dir comp)
+macro(CREATE_MARIADB_SYMLINK_IN_DIR src dest)
+  CMAKE_PARSE_ARGUMENTS(ARG "" "DESTINATION;COMPONENT" "" ${ARGN})
   if(UNIX)
     add_custom_target(
       SYM_${dest} ALL
@@ -71,6 +75,9 @@ macro(CREATE_MARIADB_SYMLINK_IN_DIR src dest dir comp)
       COMMAND ${CMAKE_COMMAND} -E create_symlink ${src} ${dest}
       COMMENT "mklink ${src} -> ${dest}")
 
-    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${dest} DESTINATION ${dir} COMPONENT ${comp})
+    if (ARG_DESTINATION)
+      install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${dest}
+        DESTINATION ${ARG_DESTINATION} COMPONENT ${ARG_COMPONENT})
+    endif()
   endif()
 endmacro(CREATE_MARIADB_SYMLINK_IN_DIR)
