@@ -10,6 +10,12 @@ IF(GIT_EXECUTABLE AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/columnstore/.git)
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/columnstore)
 ENDIF()
 
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOLUMNSTORE_MATURITY=MariaDB_PLUGIN_MATURITY_GAMMA")
+IF(INSTALL_SYSCONF2DIR)
+  install(FILES x-columnstore.cnf
+    DESTINATION ${INSTALL_SYSCONF2DIR} COMPONENT columnstore-engine)
+ENDIF()
+
 add_subdirectory(columnstore)
 
 # Needed to bump the component changes up to the main scope
