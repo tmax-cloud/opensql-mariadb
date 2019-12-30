@@ -3991,6 +3991,24 @@ void Query_log_event::pack_info(Protocol *protocol)
     append_identifier(protocol->thd, &buf, db, db_len);
     buf.append(STRING_WITH_LEN("; "));
   }
+  if (flags2 & (OPTION_NO_FOREIGN_KEY_CHECKS | OPTION_AUTO_IS_NULL |
+                OPTION_RELAXED_UNIQUE_CHECKS |
+                OPTION_NO_CHECK_CONSTRAINT_CHECKS |
+                OPTION_IF_EXISTS))
+  {
+    buf.append(STRING_WITH_LEN("set "));
+    if (flags2 & OPTION_NO_FOREIGN_KEY_CHECKS)
+      buf.append(STRING_WITH_LEN("foreign_key_checks=1, "));
+    if (flags2 & OPTION_AUTO_IS_NULL)
+      buf.append(STRING_WITH_LEN("sql_auto_is_null, "));
+    if (flags2 & OPTION_RELAXED_UNIQUE_CHECKS)
+      buf.append(STRING_WITH_LEN("unique_checks=1, "));
+    if (flags2 & OPTION_NO_CHECK_CONSTRAINT_CHECKS)
+      buf.append(STRING_WITH_LEN("check_constraint_checks=1, "));
+    if (flags2 & OPTION_IF_EXISTS)
+      buf.append(STRING_WITH_LEN("@@sql_if_exists=1, "));
+    buf[buf.length()-2]=';';
+  }
   if (query && q_len)
     buf.append(query, q_len);
   protocol->store(&buf);
@@ -5256,6 +5274,8 @@ bool Query_log_event::print_query_header(IO_CACHE* file,
           print_set_option(file, tmp, OPTION_NO_CHECK_CONSTRAINT_CHECKS,
                            ~flags2,
                            "@@session.check_constraint_checks", &need_comma) ||
+          print_set_option(file, tmp, OPTION_IF_EXISTS, flags2,
+                           "@@session.sql_if_exists", &need_comma) ||
           my_b_printf(file,"%s\n", print_event_info->delimiter))
         goto err;
       print_event_info->flags2= flags2;

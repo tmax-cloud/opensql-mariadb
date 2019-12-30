@@ -22,6 +22,7 @@
 #endif
 
 #include "maria.h"				/* Structs & some defines */
+C_MODE_START
 #include "ma_pagecache.h"
 #include <myisampack.h>				/* packing of keys */
 #include <my_tree.h>
@@ -53,12 +54,10 @@
 /* maria_open() flag, specific for maria_pack */
 #define HA_OPEN_IGNORE_MOVED_STATE (1U << 30)
 
-C_MODE_START
 typedef struct st_sort_key_blocks MA_SORT_KEY_BLOCKS;
 typedef struct st_sort_ftbuf MA_SORT_FT_BUF;
 
 extern PAGECACHE maria_pagecache_var, *maria_pagecache;
-C_MODE_END
 int maria_assign_to_pagecache(MARIA_HA *info, ulonglong key_map,
 			      PAGECACHE *key_cache);
 void maria_change_pagecache(PAGECACHE *old_key_cache,
@@ -949,7 +948,6 @@ extern mysql_mutex_t THR_LOCK_maria;
 #define MARIA_SMALL_BLOB_BUFFER 1024U
 #define MARIA_MAX_CONTROL_FILE_LOCK_RETRY 30     /* Retry this many times */
 
-C_MODE_START
 /* Some extern variables */
 extern LIST *maria_open_list;
 extern uchar maria_file_magic[], maria_pack_file_magic[];
@@ -1003,7 +1001,6 @@ extern PSI_file_key key_file_translog, key_file_kfile, key_file_dfile,
 
 /* Note that PSI_stage_info globals must always be declared. */
 extern PSI_stage_info stage_waiting_for_a_resource;
-C_MODE_END
 
 /* This is used by _ma_calc_xxx_key_length och _ma_store_key */
 typedef struct st_maria_s_param
@@ -1387,7 +1384,7 @@ void _ma_remap_file(MARIA_HA *info, my_off_t size);
 MARIA_RECORD_POS _ma_write_init_default(MARIA_HA *info, const uchar *record);
 my_bool _ma_write_abort_default(MARIA_HA *info);
 int maria_delete_table_files(const char *name, my_bool temporary,
-                             myf sync_dir);
+                             myf flags);
 
 /*
   This cannot be in my_base.h as it clashes with HA_SPATIAL.
@@ -1396,7 +1393,6 @@ int maria_delete_table_files(const char *name, my_bool temporary,
 */
 #define HA_RTREE_INDEX	        16384	/* For RTREE search */
 
-C_MODE_START
 #define MARIA_FLUSH_DATA  1
 #define MARIA_FLUSH_INDEX 2
 int _ma_flush_table_files(MARIA_HA *info, uint flush_data_or_index,
@@ -1416,7 +1412,6 @@ void _ma_check_print_warning(HA_CHECK *param, const char *fmt, ...)
 void _ma_check_print_info(HA_CHECK *param, const char *fmt, ...)
   ATTRIBUTE_FORMAT(printf, 2, 3);
 my_bool write_log_record_for_repair(const HA_CHECK *param, MARIA_HA *info);
-C_MODE_END
 
 int _ma_flush_pending_blocks(MARIA_SORT_PARAM *param);
 int _ma_sort_ft_buf_flush(MARIA_SORT_PARAM *sort_param);
@@ -1462,9 +1457,7 @@ extern void maria_page_write_failure(int error, PAGECACHE_IO_HOOK_ARGS *args);
 extern my_bool maria_flush_log_for_page(PAGECACHE_IO_HOOK_ARGS *args);
 extern my_bool maria_flush_log_for_page_none(PAGECACHE_IO_HOOK_ARGS *args);
 
-C_MODE_START
 extern PAGECACHE *maria_log_pagecache;
-C_MODE_END
 extern void ma_set_index_cond_func(MARIA_HA *info, index_cond_func_t func,
                                    void *func_arg);
 check_result_t ma_check_index_cond(MARIA_HA *info, uint keynr, uchar *record);
@@ -1496,3 +1489,4 @@ static inline void aria_init_stack_alloc(MARIA_HA *info)
   init_stack_alloc(&info->stack_alloc, 10000000, 10000000, 4096);
 #endif /* DEBUG_STACK_ALLOC */
 }
+C_MODE_END

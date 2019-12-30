@@ -625,7 +625,7 @@ st_select_lex_unit::init_prepare_fake_select_lex(THD *thd_arg,
 
 bool st_select_lex_unit::prepare_join(THD *thd_arg, SELECT_LEX *sl,
                                       select_result *tmp_result,
-                                      ulong additional_options,
+                                      ulonglong additional_options,
                                       bool is_union_select)
 {
   DBUG_ENTER("st_select_lex_unit::prepare_join");
@@ -811,7 +811,7 @@ bool st_select_lex_unit::join_union_item_types(THD *thd_arg,
 
 bool st_select_lex_unit::prepare(TABLE_LIST *derived_arg,
                                  select_result *sel_result,
-                                 ulong additional_options)
+                                 ulonglong additional_options)
 {
   SELECT_LEX *lex_select_save= thd->lex->current_select;
   SELECT_LEX *sl, *first_sl= first_select();
