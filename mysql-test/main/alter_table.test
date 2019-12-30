@@ -2169,4 +2169,16 @@ SHOW TABLES;
 # Cleanup
 DROP TABLE t1, t2;
 
+--echo #
+--echo # ALTER TABLE IF EXISTS
+--echo #
+
+create table t1 (a int);
+alter table if exists t1 add column b int;
+alter table if exists t2 add column c int;
+alter table if exists t9 rename t1;
+alter table if exists t1 rename t2;
+show create table t2;
+drop table t2;
+
 --echo # End of enterprise tests
