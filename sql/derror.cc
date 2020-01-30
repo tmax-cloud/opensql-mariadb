@@ -68,9 +68,9 @@ static const char ***original_error_messages;
 bool init_errmessage(void)
 {
   const char **errmsgs;
-  bool error= FALSE;
   const char *lang= my_default_lc_messages->errmsgs->language;
-  my_bool use_english;
+  bool error= FALSE;
+  bool use_english;
 
   DBUG_ENTER("init_errmessage");
 
@@ -84,9 +84,8 @@ bool init_errmessage(void)
   if (!use_english)
   {
     /* Read messages from file. */
-    use_english= read_texts(ERRMSG_FILE,lang, &original_error_messages);
-    error= use_english != FALSE;
-    if (error)
+    error= use_english= read_texts(ERRMSG_FILE,lang, &original_error_messages);
+    if(error)
       sql_print_error("Could not load error messages for %s",lang);
   }
 
