@@ -2146,3 +2146,27 @@ insert into t1 (id,name,enabled,domain_id) values (1,"Monty",1,"domain_id");
 insert into t1 (id,name,enabled,domain_id) values (2,"Monty2",1,"domain_id2");
 ALTER TABLE t1 ADD CONSTRAINT ixu_user2_name_domain_id UNIQUE (domain_id, name);
 DROP TABLE t1;
+
+--echo # Start of enterprise tests
+
+--echo #
+--echo # MENT-416: Table disappears or Assertion
+--echo # `!is_set() || (m_status == DA_OK_BULK && is_bulk_op())'
+--echo # fails upon RENAME TABLE
+--echo #
+
+SET SESSION FOREIGN_KEY_CHECKS = OFF;
+
+CREATE TABLE t1 (a INT) ENGINE=InnoDB;
+ALTER TABLE t1 ADD CONSTRAINT FOREIGN KEY (a) REFERENCES t3 (b);
+CREATE TABLE IF NOT EXISTS t2 (b INT) ENGINE=InnoDB;
+#replace both file names (and 'to') with a XXX
+--replace_regex /'.*'/XXX/
+--error ER_ERROR_ON_RENAME
+ALTER TABLE t2 RENAME TO t3, DROP CONSTRAINT IF EXISTS foo;
+SHOW TABLES;
+
+# Cleanup
+DROP TABLE t1, t2;
+
+--echo # End of enterprise tests

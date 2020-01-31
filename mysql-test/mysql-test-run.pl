@@ -4385,6 +4385,8 @@ sub extract_warning_lines ($$) {
      # Disable test for UBSAN on dynamically loaded objects
      qr/runtime error: member call.*object.*'Handler_share'/,
      qr/sql_type\.cc.* runtime error: member call.*object.* 'Type_collection'/,
+
+     qr/InnoDB: In RENAME TABLE table .* is referenced in foreign key constraints which are not compatible with the new table definition./
     );
 
   my $matched_lines= [];
