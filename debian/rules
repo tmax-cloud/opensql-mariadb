@@ -120,7 +120,7 @@ endif
 	# Run 'make install' without output since it is uninteresting and
 	# silencing it helps to make overall build log shorter and more readable
 	@echo "Running $(MAKE) install DESTDIR=$(TMP) ..."
-	cd $(BUILDDIR) && $(MAKE) install DESTDIR=$(TMP) > /dev/null
+	cd $(BUILDDIR) && $(MAKE) install DESTDIR=$(TMP) && $(MAKE) clean > /dev/null
 
 	# If mariadb-test package is removed, also remove most of it's files
 	grep --quiet "Package: mariadb-test" debian/control || rm -rf $(TMP)/usr/share/mysql/mysql-test
