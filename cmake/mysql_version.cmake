@@ -85,8 +85,8 @@ IF(NOT CPACK_PACKAGE_FILE_NAME)
 ENDIF()
 
 SET_IF_UNSET(CPACK_SOURCE_PACKAGE_FILE_NAME "mariadb-${VERSION}")
-SET_IF_UNSET(CPACK_PACKAGE_CONTACT "MariaDB Developers <maria-developers@lists.launchpad.net>")
-SET_IF_UNSET(CPACK_PACKAGE_VENDOR "MariaDB Foundation")
+SET_IF_UNSET(CPACK_PACKAGE_CONTACT "MariaDB Corporation <pkg-maintainer@mariadb.com>")
+SET_IF_UNSET(CPACK_PACKAGE_VENDOR "MariaDB Corporation")
 SET_IF_UNSET(CPACK_PACKAGE_DESCRIPTION "${CPACK_PACKAGE_DESCRIPTION_SUMMARY}
 
 It is GPL v2 licensed, which means you can use the it free of charge under the
