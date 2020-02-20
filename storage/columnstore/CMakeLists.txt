@@ -25,6 +25,8 @@ IF (RPM)
     SET(CPACK_RPM_columnstore-libs_USER_FILELIST ${CPACK_RPM_columnstore-libs_USER_FILELIST} PARENT_SCOPE)
     SET(CPACK_RPM_columnstore-engine_USER_FILELIST ${CPACK_RPM_columnstore-engine_USER_FILELIST} PARENT_SCOPE)
     SET(CPACK_RPM_columnstore-platform_PACKAGE_REQUIRES ${CPACK_RPM_columnstore-platform_PACKAGE_REQUIRES} PARENT_SCOPE)
+    SET(CPACK_RPM_columnstore-platform_POST_INSTALL_SCRIPT_FILE ${CPACK_RPM_columnstore-platform_POST_INSTALL_SCRIPT_FILE} PARENT_SCOPE)
+    SET(CPACK_RPM_columnstore-platform_PRE_UNINSTALL_SCRIPT_FILE ${CPACK_RPM_columnstore-platform_PRE_UNINSTALL_SCRIPT_FILE} PARENT_SCOPE)
 ENDIF ()
 
 # Tests are here and not in the engine tree (or the path thing wouldn't go so well)
