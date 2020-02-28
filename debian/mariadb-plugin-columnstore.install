@@ -1,5 +1,4 @@
 etc/mysql/conf.d/columnstore.cnf
-etc/mysql/conf.d/x-columnstore.cnf
 usr/lib/mysql/plugin/ha_columnstore.so
 usr/lib/mysql/plugin/libregr_mysql.so
 usr/lib/mysql/plugin/libudf_mysql.so
