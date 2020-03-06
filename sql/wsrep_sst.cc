@@ -408,6 +408,7 @@ bool wsrep_sst_received (THD*                thd,
     {
       int const rcode(seqno < 0 ? seqno : 0);
       error= wsrep_sst_complete(thd,rcode, sst_gtid);
+  wsrep_wait_until_innodb_initialized();
     }
 
     return error;
