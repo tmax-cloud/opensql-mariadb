@@ -2770,14 +2770,13 @@ void handler::unbind_psi()
   PSI_CALL_unbind_table(m_psi);
 }
 
-int handler::rebind()
+void handler::rebind_psi()
 {
   /*
     Notify the instrumentation that this table is now owned
     by this thread.
   */
   m_psi= PSI_CALL_rebind_table(ha_table_share_psi(), this, m_psi);
-  return 0;
 }
 
 
@@ -4801,7 +4800,7 @@ void
 handler::ha_drop_table(const char *name)
 {
   DBUG_ASSERT(m_lock_type == F_UNLCK);
-  if (ha_check_if_updates_are_ignored(current_thd, ht, "DROP"))
+  if (check_if_updates_are_ignored("DROP"))
     return;
 
   mark_trx_read_write();
@@ -4837,7 +4836,7 @@ handler::ha_create(const char *name, TABLE *form, HA_CREATE_INFO *info_arg)
 int
 handler::ha_create_partitioning_metadata(const char *name,
                                          const char *old_name,
-                                         int action_flag)
+                                         chf_create_flags action_flag)
 {
   /*
     Normally this is done when unlocked, but in fast_alter_partition_table,
@@ -5721,6 +5720,12 @@ retry_from_frm:
 
   If statement is ignored, write a note
 */
+
+bool handler::check_if_updates_are_ignored(const char *op) const
+{
+  return ha_check_if_updates_are_ignored(table->in_use, ht, op);
+}
+
 
 bool ha_check_if_updates_are_ignored(THD *thd, handlerton *hton,
                                      const char *op)

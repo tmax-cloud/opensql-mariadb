@@ -2423,7 +2423,8 @@ public:
   // track down slow pthread_create
   ulonglong  prior_thr_create_utime, thr_create_utime;
   ulonglong  start_utime, utime_after_lock, utime_after_query;
-
+  /* This can be used by handlers to send signals to the SQL level */
+  ulonglong  replication_flags;
   // Process indicator
   struct {
     /*

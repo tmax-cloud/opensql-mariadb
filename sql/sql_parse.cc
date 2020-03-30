@@ -5370,6 +5370,9 @@ mysql_execute_command(THD *thd)
   case SQLCOM_REVOKE:
   case SQLCOM_GRANT:
   {
+    if (thd->variables.option_bits & OPTION_IF_EXISTS)
+      lex->create_info.set(DDL_options_st::OPT_IF_EXISTS);
+
     if (lex->type != TYPE_ENUM_PROXY &&
         check_access(thd, lex->grant | lex->grant_tot_col | GRANT_ACL,
                      first_table ?  first_table->db.str : select_lex->db.str,
@@ -6210,6 +6213,8 @@ mysql_execute_command(THD *thd)
   case SQLCOM_RESIGNAL:
   case SQLCOM_GET_DIAGNOSTICS:
   case SQLCOM_CALL:
+    if (thd->variables.option_bits & OPTION_IF_EXISTS)
+      lex->create_info.set(DDL_options_st::OPT_IF_EXISTS);
     DBUG_ASSERT(lex->m_sql_cmd != NULL);
     res= lex->m_sql_cmd->execute(thd);
     DBUG_PRINT("result", ("res: %d  killed: %d  is_error: %d",
