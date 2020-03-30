@@ -6940,41 +6940,30 @@ static int alter_close_table(ALTER_PARTITION_PARAM_TYPE *lpt)
 void handle_alter_part_error(ALTER_PARTITION_PARAM_TYPE *lpt,
                              bool action_completed,
                              bool drop_partition,
-                             bool frm_install,
-                             bool close_table)
+                             bool frm_install)
 {
-  partition_info *part_info= lpt->part_info;
   THD *thd= lpt->thd;
+  partition_info *part_info= lpt->part_info->get_clone(thd);
   TABLE *table= lpt->table;
   DBUG_ENTER("handle_alter_part_error");
   DBUG_ASSERT(table->needs_reopen());
 
-  if (close_table)
+  /*
+    All instances of this table needs to be closed.
+    Better to do that here, than leave the cleaning up to others.
+    Acquire EXCLUSIVE mdl lock if not already acquired.
+  */
+  if (!thd->mdl_context.is_lock_owner(MDL_key::TABLE, lpt->db.str,
+                                      lpt->table_name.str,
+                                      MDL_EXCLUSIVE) &&
+      wait_while_table_is_used(thd, table, HA_EXTRA_FORCE_REOPEN))
   {
     /*
-      All instances of this table needs to be closed.
-      Better to do that here, than leave the cleaning up to others.
-      Aquire EXCLUSIVE mdl lock if not already aquired.
-    */
-    if (!thd->mdl_context.is_lock_owner(MDL_key::TABLE, lpt->db.str,
-                                        lpt->table_name.str,
-                                        MDL_EXCLUSIVE))
-    {
-      if (wait_while_table_is_used(thd, table, HA_EXTRA_FORCE_REOPEN))
-      {
-        /* At least remove this instance on failure */
-        goto err_exclusive_lock;
-      }
-    }
-    /* Ensure the share is destroyed and reopened. */
-    if (part_info)
-      part_info= part_info->get_clone(thd);
-    close_all_tables_for_name(thd, table->s, HA_EXTRA_NOT_USED, NULL);
-  }
-  else
-  {
-err_exclusive_lock:
-    /*
+      Did not succeed in getting exclusive access to the table.
+
+      Since we have altered a cached table object (and its part_info) we need
+      at least to remove this instance so it will not be reused.
+
       Temporarily remove it from the locked table list, so that it will get
       reopened.
     */
@@ -6986,10 +6975,13 @@ err_exclusive_lock:
       the table cache.
     */
     mysql_lock_remove(thd, thd->lock, table);
-    if (part_info)
-      part_info= part_info->get_clone(thd);
     close_thread_table(thd, &thd->open_tables);
     lpt->table_list->table= NULL;
+  }
+  else
+  {
+    /* Ensure the share is destroyed and reopened. */
+    close_all_tables_for_name(thd, table->s, HA_EXTRA_NOT_USED, NULL);
   }
 
   if (part_info->first_log_entry &&
@@ -7008,17 +7000,20 @@ err_exclusive_lock:
         /* Table is still ok, but we left a shadow frm file behind. */
         push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, 1,
                             "%s %s",
-           "Operation was unsuccessful, table is still intact,",
-           "but it is possible that a shadow frm file was left behind");
+                            "Operation was unsuccessful, table is still "
+                            "intact, but it is possible that a shadow frm "
+                            "file was left behind");
       }
       else
       {
         push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, 1,
                             "%s %s %s %s",
-           "Operation was unsuccessful, table is still intact,",
-           "but it is possible that a shadow frm file was left behind.",
-           "It is also possible that temporary partitions are left behind,",
-           "these could be empty or more or less filled with records");
+                            "Operation was unsuccessful, table is still "
+                            "intact, but it is possible that a shadow frm "
+                            "file was left behind.",
+                            "It is also possible that temporary partitions "
+                            "are left behind, these could be empty or more "
+                            "or less filled with records");
       }
     }
     else
@@ -7026,14 +7021,15 @@ err_exclusive_lock:
       if (frm_install)
       {
         /*
-           Failed during install of shadow frm file, table isn't intact
-           and dropped partitions are still there
+          Failed during install of shadow frm file, table isn't intact
+          and dropped partitions are still there
         */
         push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, 1,
                             "%s %s %s",
-          "Failed during alter of partitions, table is no longer intact.",
-          "The frm file is in an unknown state, and a backup",
-          "is required.");
+                            "Failed during alter of partitions, table is no "
+                            "longer intact.",
+                            "The frm file is in an unknown state, and a "
+                            "backup is required.");
       }
       else if (drop_partition)
       {
@@ -7045,8 +7041,9 @@ err_exclusive_lock:
         */
         push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, 1,
                             "%s %s",
-              "Failed during drop of partitions, table is intact.",
-              "Manual drop of remaining partitions is required");
+                            "Failed during drop of partitions, table is "
+                            "intact.",
+                            "Manual drop of remaining partitions is required");
       }
       else
       {
@@ -7057,9 +7054,10 @@ err_exclusive_lock:
         */
         push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, 1,
                             "%s %s %s",
-           "Failed during renaming of partitions. We are now in a position",
-           "where table is not reusable",
-           "Table is disabled by writing ancient frm file version into it");
+                            "Failed during renaming of partitions. We are now "
+                            "in a position where table is not reusable",
+                            "Table is disabled by writing ancient frm file "
+                            "version into it");
       }
     }
   }
@@ -7085,8 +7083,8 @@ err_exclusive_lock:
         completed.
       */
       push_warning_printf(thd, Sql_condition::WARN_LEVEL_WARN, 1,"%s %s",
-         "Operation was successfully completed by failure handling,",
-         "after failure of normal operation");
+                          "Operation was successfully completed by failure "
+                          "handling, after failure of normal operation");
     }
   }
 
@@ -7188,7 +7186,6 @@ uint fast_alter_partition_table(THD *thd, TABLE *table,
   ALTER_PARTITION_PARAM_TYPE lpt_obj;
   ALTER_PARTITION_PARAM_TYPE *lpt= &lpt_obj;
   bool action_completed= FALSE;
-  bool close_table_on_failure= FALSE;
   bool frm_install= FALSE;
   MDL_ticket *mdl_ticket= table->mdl_ticket;
   DBUG_ENTER("fast_alter_partition_table");
@@ -7328,13 +7325,11 @@ uint fast_alter_partition_table(THD *thd, TABLE *table,
         wait_while_table_is_used(thd, table, HA_EXTRA_NOT_USED) ||
         ERROR_INJECT_CRASH("crash_drop_partition_3") ||
         ERROR_INJECT_ERROR("fail_drop_partition_3") ||
-        (close_table_on_failure= TRUE, FALSE) ||
         write_log_drop_partition(lpt) ||
         (action_completed= TRUE, FALSE) ||
         ERROR_INJECT_CRASH("crash_drop_partition_4") ||
         ERROR_INJECT_ERROR("fail_drop_partition_4") ||
         alter_close_table(lpt) ||
-        (close_table_on_failure= FALSE, FALSE) ||
         ERROR_INJECT_CRASH("crash_drop_partition_5") ||
         ERROR_INJECT_ERROR("fail_drop_partition_5") ||
         ((!thd->lex->no_write_to_binlog) &&
@@ -7355,8 +7350,7 @@ uint fast_alter_partition_table(THD *thd, TABLE *table,
         ERROR_INJECT_CRASH("crash_drop_partition_9") ||
         ERROR_INJECT_ERROR("fail_drop_partition_9"))
     {
-      handle_alter_part_error(lpt, action_completed, TRUE, frm_install,
-                              close_table_on_failure);
+      handle_alter_part_error(lpt, action_completed, TRUE, frm_install);
       goto err;
     }
     if (alter_partition_lock_handling(lpt))
@@ -7404,14 +7398,12 @@ uint fast_alter_partition_table(THD *thd, TABLE *table,
         wait_while_table_is_used(thd, table, HA_EXTRA_NOT_USED) ||
         ERROR_INJECT_CRASH("crash_add_partition_3") ||
         ERROR_INJECT_ERROR("fail_add_partition_3") ||
-        (close_table_on_failure= TRUE, FALSE) ||
         write_log_add_change_partition(lpt) ||
         ERROR_INJECT_CRASH("crash_add_partition_4") ||
         ERROR_INJECT_ERROR("fail_add_partition_4") ||
         mysql_change_partitions(lpt) ||
         ERROR_INJECT_CRASH("crash_add_partition_5") ||
         ERROR_INJECT_ERROR("fail_add_partition_5") ||
-        (close_table_on_failure= FALSE, FALSE) ||
         alter_close_table(lpt) ||
         ERROR_INJECT_CRASH("crash_add_partition_6") ||
         ERROR_INJECT_ERROR("fail_add_partition_6") ||
@@ -7434,8 +7426,7 @@ uint fast_alter_partition_table(THD *thd, TABLE *table,
         ERROR_INJECT_CRASH("crash_add_partition_10") ||
         ERROR_INJECT_ERROR("fail_add_partition_10"))
     {
-      handle_alter_part_error(lpt, action_completed, FALSE, frm_install,
-                              close_table_on_failure);
+      handle_alter_part_error(lpt, action_completed, FALSE, frm_install);
       goto err;
     }
     if (alter_partition_lock_handling(lpt))
@@ -7513,7 +7504,6 @@ uint fast_alter_partition_table(THD *thd, TABLE *table,
         ERROR_INJECT_CRASH("crash_change_partition_5") ||
         ERROR_INJECT_ERROR("fail_change_partition_5") ||
         alter_close_table(lpt) ||
-        (close_table_on_failure= FALSE, FALSE) ||
         ERROR_INJECT_CRASH("crash_change_partition_6") ||
         ERROR_INJECT_ERROR("fail_change_partition_6") ||
         write_log_final_change_partition(lpt) ||
@@ -7541,8 +7531,7 @@ uint fast_alter_partition_table(THD *thd, TABLE *table,
         ERROR_INJECT_CRASH("crash_change_partition_12") ||
         ERROR_INJECT_ERROR("fail_change_partition_12"))
     {
-      handle_alter_part_error(lpt, action_completed, FALSE, frm_install,
-                              close_table_on_failure);
+      handle_alter_part_error(lpt, action_completed, FALSE, frm_install);
       goto err;
     }
     if (alter_partition_lock_handling(lpt))
