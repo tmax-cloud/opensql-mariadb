@@ -408,7 +408,9 @@ sub main {
   if ($opt_gcov) {
     system './dgcov.pl --purge';
   }
-  
+
+
+
   #######################################################################
   my $num_tests= $mtr_report::tests_total= @$tests;
   if ( $opt_parallel eq "auto" ) {
@@ -5855,6 +5857,7 @@ Misc options
   xml-report=<file>     Output jUnit xml file of the results.
   tail-lines=N          Number of lines of the result to include in a failure
                         report.
+  xml-report=<file>     Output jUnit xml file of the results.
 
 Some options that control enabling a feature for normal test runs,
 can be turned off by prepending 'no' to the option, e.g. --notimer.
