@@ -257,6 +257,8 @@ ELSEIF(RPM MATCHES "sles")
 ENDIF()
 IF(RPM MATCHES "fedora31" OR RPM MATCHES "(rhel|centos)8")
   SET(PYTHON_SHEBANG "/usr/bin/python3" CACHE STRING "python shebang")
+  SET(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
+       "${CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION};${INSTALL_SYSCONF2DIR_RPM}")
 ENDIF()
 
 # If we want to build build MariaDB-shared-compat,
