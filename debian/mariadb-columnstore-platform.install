@@ -61,7 +61,6 @@ usr/bin/os_detect.sh
 usr/bin/post-mysql-install
 usr/bin/post-mysqld-install
 usr/bin/postConfigure
-usr/bin/quick_installer_amazon.sh
 usr/bin/quick_installer_multi_server.sh
 usr/bin/quick_installer_single_server.sh
 usr/bin/remote_command.sh
