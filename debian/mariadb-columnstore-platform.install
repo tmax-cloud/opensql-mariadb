@@ -5,6 +5,7 @@ etc/columnstore/ErrorMessage.txt
 etc/columnstore/MessageFile.txt
 etc/columnstore/ProcessConfig.xml
 etc/columnstore/storagemanager.cnf
+etc/columnstore/storagemanager.cnf.example
 usr/bin/DDLProc
 usr/bin/DMLProc
 usr/bin/ExeMgr
@@ -80,11 +81,10 @@ usr/bin/smput
 usr/bin/smrm
 usr/bin/softwareReport.sh
 usr/bin/startupTests.sh
+usr/bin/testS3Connection
 usr/bin/viewtablelock
 usr/bin/workernode
 usr/lib/x86_64-linux-gnu/libmarias3.so
-usr/lib/x86_64-linux-gnu/libmarias3.so.3
-usr/lib/x86_64-linux-gnu/libmarias3.so.3.1.2
 usr/lib/x86_64-linux-gnu/libstoragemanager.so
 usr/share/columnstore/columnstore.service
 usr/share/columnstore/columnstoreAlias
