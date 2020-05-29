@@ -1068,7 +1068,7 @@ public:
 
   /* The name of the table type that will be used for display purposes */
   const char *table_type() const;
-  virtual const char *real_table_type() const { return table_type(); }
+  virtual const char *real_table_type() const override { return table_type(); }
 
   /* The name of the row type used for the underlying tables. */
   enum row_type get_row_type() const override;
@@ -1602,7 +1602,7 @@ public:
     return h;
   }
 
-  virtual bool partition_engine() { return 1;}
+  bool partition_engine() override { return true; }
   ha_rows part_records(partition_element *part_elem)
   {
     DBUG_ASSERT(m_part_info);
