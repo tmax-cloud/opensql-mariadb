@@ -551,7 +551,7 @@ Description: Required libraries for the MariaDB ColumnStore storage engine
 
 Package: mariadb-columnstore-platform
 Architecture: amd64
-Depends: mariadb-columnstore-libs-10.4 (= ${binary:Version}),
+Depends: mariadb-columnstore-libs (= ${binary:Version}),
          expect,
          net-tools,
          libsnappy1 | libsnappy1v5,
@@ -564,8 +564,8 @@ Description: The platform binaries for MariaDB ColumnStore
 Package: mariadb-plugin-columnstore
 Architecture: amd64
 Depends: mariadb-server-10.4 (= ${binary:Version}),
-         mariadb-columnstore-libs-10.4 (= ${binary:Version}),
-         mariadb-columnstore-platform-10.4 (= ${binary:Version}),
+         mariadb-columnstore-libs (= ${binary:Version}),
+         mariadb-columnstore-platform (= ${binary:Version}),
          ${misc:Depends},
          ${shlibs:Depends}
 Recommends: python-mysqldb
