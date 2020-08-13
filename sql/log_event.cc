@@ -3991,10 +3991,11 @@ void Query_log_event::pack_info(Protocol *protocol)
     append_identifier(protocol->thd, &buf, db, db_len);
     buf.append(STRING_WITH_LEN("; "));
   }
-  if (flags2 & (OPTION_NO_FOREIGN_KEY_CHECKS | OPTION_AUTO_IS_NULL |
-                OPTION_RELAXED_UNIQUE_CHECKS |
-                OPTION_NO_CHECK_CONSTRAINT_CHECKS |
-                OPTION_IF_EXISTS))
+  if (flags2_inited &&
+      (flags2 & (OPTION_NO_FOREIGN_KEY_CHECKS | OPTION_AUTO_IS_NULL |
+                 OPTION_RELAXED_UNIQUE_CHECKS |
+                 OPTION_NO_CHECK_CONSTRAINT_CHECKS |
+                 OPTION_IF_EXISTS)))
   {
     buf.append(STRING_WITH_LEN("set "));
     if (flags2 & OPTION_NO_FOREIGN_KEY_CHECKS)
