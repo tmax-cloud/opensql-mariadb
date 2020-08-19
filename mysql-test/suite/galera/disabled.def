@@ -41,7 +41,10 @@ galera_var_reject_queries : assertion in inline_mysql_socket_send
 galera_var_replicate_myisam_on : MDEV-24062 Galera test failure on galera_var_replicate_myisam_on
 galera_var_retry_autocommit: MDEV-18181 Galera test failure on galera.galera_var_retry_autocommit
 galera_wan : MDEV-17259 Test failure on galera.galera_wan
+galera_wan_restart_sst : 10.4.19-12 rebase
+galera_ist_progress : 10.4.19-12 rebase
 mysql-wsrep#198 : MDEV-24446: galera.mysql-wsrep#198 MTR failed: query 'reap' failed: 2000: Unknown MySQL error
+mdev_21718 : MENT-937 Galera assertion wsrep::client_state::before_command() in client_state.cpp:120
 partition : MDEV-19958 Galera test failure on galera.partition
 query_cache: MDEV-15805 Test failure on galera.query_cache
 sql_log_bin : MDEV-21491 galera.sql_log_bin
