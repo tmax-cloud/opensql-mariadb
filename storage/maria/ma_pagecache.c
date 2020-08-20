@@ -682,6 +682,10 @@ static my_bool pagecache_fwrite(PAGECACHE *pagecache,
     DBUG_PRINT("error", ("write callback problem"));
     DBUG_RETURN(1);
   }
+#if __has_feature(memory_sanitizer) /* FIXME: encryption.aria_tiny etc. fail */
+  /* FIXME: ENGINE=Aria occasionally writes uninitialized data */
+  __msan_unpoison(args.page, pagecache->block_size);
+#endif
   res= (int)my_pwrite(filedesc->file, args.page, pagecache->block_size,
                  ((my_off_t) pageno << pagecache->shift), flags);
   (*filedesc->post_write_hook)(res, &args);
@@ -790,8 +794,8 @@ size_t init_pagecache(PAGECACHE *pagecache, size_t use_mem,
   {
     if (mysql_mutex_init(key_PAGECACHE_cache_lock,
                          &pagecache->cache_lock, MY_MUTEX_INIT_FAST) ||
-        my_hash_init(&pagecache->files_in_flush, &my_charset_bin, 32,
-                     offsetof(struct st_file_in_flush, file),
+        my_hash_init(&pagecache->files_in_flush,
+                     &my_charset_bin, 32, offsetof(struct st_file_in_flush, file),
                      sizeof(((struct st_file_in_flush *)NULL)->file),
                      NULL, NULL, 0))
       goto err;
@@ -846,9 +850,9 @@ size_t init_pagecache(PAGECACHE *pagecache, size_t use_mem,
            (blocks << pagecache->shift) > use_mem && blocks > 8)
       blocks--;
     /* Allocate memory for cache page buffers */
+    pagecache->mem_size= blocks * pagecache->block_size;
     if ((pagecache->block_mem=
-      my_large_malloc(blocks * pagecache->block_size,
-                         MYF(MY_WME))))
+      my_large_malloc(pagecache->mem_size, MYF(MY_WME))))
     {
       /*
         Allocate memory for blocks, hash_links and hash entries;
@@ -1370,8 +1374,8 @@ static void link_block(PAGECACHE *pagecache, PAGECACHE_BLOCK_LINK *block,
       }
     }
     while (thread != last_thread);
-    DBUG_PRINT("XXX", ("hash_link (link block): %p,  hash_link: %p -> %p",
-                           hash_link, hash_link->block, block));
+    DBUG_PRINT("hash", ("hash_link (link block): %p,  hash_link: %p -> %p",
+                        hash_link, hash_link->block, block));
     hash_link->block= block;
     /* Ensure that no other thread tries to use this block */
     block->status|= PCBLOCK_REASSIGNED;
@@ -1659,8 +1663,8 @@ static inline void link_hash(PAGECACHE_HASH_LINK **start,
 static void unlink_hash(PAGECACHE *pagecache, PAGECACHE_HASH_LINK *hash_link)
 {
   DBUG_ENTER("unlink_hash");
-  DBUG_PRINT("enter", ("hash_link: %p  fd: %u  pos: %lu  requests: %u",
-                       hash_link, (uint) hash_link->file.file,
+  DBUG_PRINT("enter", ("hash_link: %p  block: %p  fd: %u  pos: %lu  requests: %u",
+                       hash_link, hash_link->block, (uint) hash_link->file.file,
                        (ulong) hash_link->pageno,
                        hash_link->requests));
   DBUG_ASSERT(hash_link->requests == 0);
@@ -1669,8 +1673,6 @@ static void unlink_hash(PAGECACHE *pagecache, PAGECACHE_HASH_LINK *hash_link)
   if ((*hash_link->prev= hash_link->next))
     hash_link->next->prev= hash_link->prev;
 
-  DBUG_PRINT("XXX", ("hash_link (unlink): %p,  hash_link: %p -> NULL",
-                           hash_link, hash_link->block));
   hash_link->block= NULL;
   if (pagecache->waiting_for_hash_link.last_thread)
   {
@@ -2045,11 +2047,11 @@ restart:
     /* This is a request for a new page or for a page not to be removed */
     if (! block)
     {
-      DBUG_PRINT("XXX", ("request for a new page"));
+      DBUG_PRINT("info", ("request for a new page"));
       /* No block is assigned for the page yet */
       if (pagecache->blocks_unused)
       {
-        DBUG_PRINT("XXX", ("there is never used blocks"));
+        DBUG_PRINT("info", ("there is never used blocks"));
         if (pagecache->free_block_list)
         {
           /* There is a block in the free list. */
@@ -2083,11 +2085,13 @@ restart:
         block->last_hit_time= 0;
         block->rec_lsn= LSN_MAX;
         link_to_file_list(pagecache, block, file, 0);
-        DBUG_PRINT("XXX", ("block (no block assigned): %p,  hash_link: %p -> %p",
-                           block, block->hash_link, hash_link));
+        DBUG_PRINT("hash",
+                   ("block (no block assigned): %p  hash_link: %p -> %p",
+                    block, block->hash_link, hash_link));
         block->hash_link= hash_link;
-        DBUG_PRINT("XXX", ("hash_link (no block assignment): %p,  hash_link: %p -> %p",
-                            hash_link, hash_link->block, block));
+        DBUG_PRINT("hash",
+                   ("hash_link (no block assignment): %p  hash_link: %p -> %p",
+                    hash_link, hash_link->block, block));
         hash_link->block= block;
         page_status= PAGE_TO_BE_READ;
         DBUG_PRINT("info", ("page to be read set for page %p (%u)",
@@ -2098,7 +2102,7 @@ restart:
       }
       else
       {
-        DBUG_PRINT("XXX", ("there is NOT never used blocks"));
+        DBUG_PRINT("info", ("there is NOT never used blocks"));
 	/* There are no never used blocks, use a block from the LRU chain */
 
         /*
@@ -2111,7 +2115,7 @@ restart:
         if (! pagecache->used_last)
         {
           struct st_my_thread_var *thread;
-          DBUG_PRINT("XXX", ("there is NOT UNUSED blocks"));
+          DBUG_PRINT("info", ("there is NOT UNUSED blocks"));
           /*
             Wait until a new block is added to the LRU chain;
             several threads might wait here for the same page,
@@ -2150,7 +2154,7 @@ restart:
         }
         else
         {
-          DBUG_PRINT("XXX", ("take a block from LRU"));
+          DBUG_PRINT("info", ("take a block from LRU"));
           /*
              Take the first block from the LRU chain
              unlinking it from the chain
@@ -2172,8 +2176,8 @@ restart:
           }
 	  if (reg_req)
             reg_requests(pagecache, block, 1);
-          DBUG_PRINT("XXX", ("hash_link (LRU): %p,  hash_link: %p -> %p",
-                             hash_link, hash_link->block, block));
+          DBUG_PRINT("hash", ("hash_link (LRU): %p,  hash_link: %p -> %p",
+                              hash_link, hash_link->block, block));
           hash_link->block= block;
           DBUG_ASSERT(block->requests == 1);
         }
@@ -2244,8 +2248,8 @@ restart:
           link_to_file_list(pagecache, block, file,
                             (my_bool)(block->hash_link ? 1 : 0));
 
-          DBUG_PRINT("XXX", ("block (LRU): %p,  hash_link: %p -> %p",
-                             block, block->hash_link, hash_link));
+          DBUG_PRINT("hash", ("block (LRU): %p,  hash_link: %p -> %p",
+                              block, block->hash_link, hash_link));
           block->hash_link= hash_link;
           PCBLOCK_INFO(block);
           block->hits_left= init_hits_left;
@@ -4237,6 +4241,7 @@ restart:
         unreg_request(pagecache, block, 1);
       dec_counter_for_resize_op(pagecache);
       pagecache_pthread_mutex_unlock(&pagecache->cache_lock);
+      dec_counter_for_resize_op(pagecache);
       DBUG_PRINT("info", ("restarting..."));
       goto restart;
     }
@@ -4663,8 +4668,8 @@ static my_bool free_block(PAGECACHE *pagecache, PAGECACHE_BLOCK_LINK *block,
   block->type= PAGECACHE_EMPTY_PAGE;
 #endif
   block->rec_lsn= LSN_MAX;
-  DBUG_PRINT("XXX", ("block (Free): %p,  hash_link: %p -> NULL",
-              block, block->hash_link));
+  DBUG_PRINT("hash", ("block (Free): %p,  hash_link: %p -> NULL",
+                      block, block->hash_link));
   block->hash_link= NULL;
   if (block->temperature == PCBLOCK_WARM)
     pagecache->warm_blocks--;

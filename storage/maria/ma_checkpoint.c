@@ -1220,6 +1220,7 @@ err:
       {
         /* maria_close() left us to free the share */
         mysql_mutex_destroy(&share->intern_lock);
+        my_free(share->s3_path);
         ma_crypt_free(share);
         my_free(share);
       }
