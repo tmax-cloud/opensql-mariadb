@@ -5657,7 +5657,7 @@ retry_from_frm:
       if ((type= dd_frm_type(thd, path, &engine, partition_engine_name,
                              table_id, is_sequence)) == TABLE_TYPE_UNKNOWN)
         DBUG_RETURN(0);
-      
+
       if (type != TABLE_TYPE_VIEW)
       {
         plugin_ref p=  plugin_lock_by_name(thd, &engine,
@@ -5670,6 +5670,7 @@ retry_from_frm:
       else
         *hton= view_pseudo_hton;
     }
+    DBUG_PRINT("exit", (exists ? "Exists" : "Does not exist"));
     DBUG_RETURN(exists);
   }
 
@@ -5679,13 +5680,16 @@ retry_from_frm:
   {
     if (hton)
       *hton= args.hton;
+    DBUG_PRINT("exit", ("discovery found file"));
     DBUG_RETURN(TRUE);
   }
 
   if (need_full_discover_for_existence)
   {
     TABLE_LIST table;
+    bool exists;
     uint flags = GTS_TABLE | GTS_VIEW;
+
     if (!hton)
       flags|= GTS_NOLOCK;
 
@@ -5706,9 +5710,12 @@ retry_from_frm:
     }
 
     // the table doesn't exist if we've caught ER_NO_SUCH_TABLE and nothing else
-    DBUG_RETURN(!no_such_table_handler.safely_trapped_errors());
+    exists= !no_such_table_handler.safely_trapped_errors();
+    DBUG_PRINT("exit", (exists ? "Exists" : "Does not exist"));
+    DBUG_RETURN(exists);
   }
 
+  DBUG_PRINT("exit", ("Does not exist"));
   DBUG_RETURN(FALSE);
 }
 

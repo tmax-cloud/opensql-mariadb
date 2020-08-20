@@ -1539,8 +1539,8 @@ void Log_event::init_show_field_list(THD *thd, List<Item>* field_list)
 */
 my_bool Log_event::need_checksum()
 {
-  DBUG_ENTER("Log_event::need_checksum");
   my_bool ret;
+  DBUG_ENTER("Log_event::need_checksum");
   /* 
      few callers of Log_event::write 
      (incl FD::write, FD constructing code on the slave side, Rotate relay log
@@ -4273,32 +4273,42 @@ bool Query_log_event::write()
     Calculate length of whole event
     The "1" below is the \0 in the db's length
   */
-  event_length= (uint) (start-buf) + get_post_header_size_for_derived() + db_len + 1 + q_len;
+  event_length= ((uint) (start-buf) + get_post_header_size_for_derived() +
+                 db_len + 1 + q_len);
 
   return write_header(event_length) ||
          write_data(buf, QUERY_HEADER_LEN) ||
          write_post_header_for_derived() ||
-         write_data(start_of_status, (uint) (start-start_of_status)) ||
-         write_data(safe_str(db), db_len + 1) ||
+         write_data(start_of_status, (uint) status_vars_len) ||
+         write_data(db, db_len + 1) ||
          write_data(query, q_len) ||
          write_footer();
 }
 
 bool Query_compressed_log_event::write()
 {
-  const char *query_tmp = query;
-  uint32 q_len_tmp = q_len;
-  uint32 alloc_size;
-  bool ret = true;
-  q_len = alloc_size = binlog_get_compress_len(q_len);
-  query = (char *)my_safe_alloca(alloc_size);
-  if(query && !binlog_buf_compress(query_tmp, (char *)query, q_len_tmp, &q_len))
+  char *buffer;
+  uint32 alloc_size, compressed_size;
+  bool ret= true;
+
+  compressed_size= alloc_size= binlog_get_compress_len(q_len);
+  buffer= (char*) my_safe_alloca(alloc_size);
+  if (buffer &&
+      !binlog_buf_compress(query, buffer, q_len, &compressed_size))
   {
-    ret = Query_log_event::write();
+    /*
+      Write the compressed event. We have to temporarily store the event
+      in query and q_len as Query_log_event::write() uses these.
+    */
+    const char *query_tmp= query;
+    uint32 q_len_tmp= q_len;
+    query= buffer;
+    q_len= compressed_size;
+    ret= Query_log_event::write();
+    query= query_tmp;
+    q_len= q_len_tmp;
   }
-  my_safe_afree((void *)query, alloc_size);
-  query = query_tmp;
-  q_len = q_len_tmp;
+  my_safe_afree(buffer, alloc_size);
   return ret;
 }
 
@@ -4339,7 +4349,7 @@ Query_log_event::Query_log_event(THD* thd_arg, const char* query_arg, size_t que
              (suppress_use ? LOG_EVENT_SUPPRESS_USE_F : 0),
 	     using_trans),
    data_buf(0), query(query_arg), catalog(thd_arg->catalog),
-   db(thd_arg->db.str), q_len((uint32) query_length),
+   q_len((uint32) query_length),
    thread_id(thd_arg->thread_id),
    /* save the original thread id; we already know the server id */
    slave_proxy_id((ulong)thd_arg->variables.pseudo_thread_id),
@@ -4352,6 +4362,8 @@ Query_log_event::Query_log_event(THD* thd_arg, const char* query_arg, size_t que
    table_map_for_update((ulonglong)thd_arg->table_map_for_update),
    master_data_written(0)
 {
+  /* status_vars_len is set just before writing the event */
+
   time_t end_time;
 
 #ifdef WITH_WSREP
@@ -4380,8 +4392,10 @@ Query_log_event::Query_log_event(THD* thd_arg, const char* query_arg, size_t que
     as an existing catalog of length zero. is that safe? /sven
   */
   catalog_len = (catalog) ? (uint32) strlen(catalog) : 0;
-  /* status_vars_len is set just before writing the event */
-  db_len = (db) ? (uint32) strlen(db) : 0;
+
+  if (!(db= thd->db.str))
+    db= "";
+  db_len= (uint32) strlen(db);
   if (thd_arg->variables.collation_database != thd_arg->db_charset)
     charset_database_number= thd_arg->variables.collation_database->number;
   

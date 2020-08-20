@@ -3800,12 +3800,13 @@ longlong Item_master_pos_wait::val_int()
   THD* thd = current_thd;
   String *log_name = args[0]->val_str(&value);
   int event_count= 0;
+  DBUG_ENTER("Item_master_pos_wait::val_int");
 
   null_value=0;
   if (thd->slave_thread || !log_name || !log_name->length())
   {
     null_value = 1;
-    return 0;
+    DBUG_RETURN(0);
   }
 #ifdef HAVE_REPLICATION
   longlong pos = (ulong)args[1]->val_int();
@@ -3841,13 +3842,15 @@ longlong Item_master_pos_wait::val_int()
   }
   mi->release();
 #endif
-  return event_count;
+  DBUG_PRINT("exit", ("event_count: %d  null_value: %d", event_count,
+                      (int) null_value));
+  DBUG_RETURN(event_count);
 
 #ifdef HAVE_REPLICATION
 err:
   {
     null_value = 1;
-    return 0;
+    DBUG_RETURN(0);
   }
 #endif
 }
@@ -3858,11 +3861,12 @@ longlong Item_master_gtid_wait::val_int()
   DBUG_ASSERT(fixed == 1);
   longlong result= 0;
   String *gtid_pos __attribute__((unused)) = args[0]->val_str(&value);
+  DBUG_ENTER("Item_master_gtid_wait::val_int");
 
   if (args[0]->null_value)
   {
     null_value= 1;
-    return 0;
+    DBUG_RETURN(0);
   }
 
   null_value=0;
@@ -3879,7 +3883,7 @@ longlong Item_master_gtid_wait::val_int()
 #else
   null_value= 0;
 #endif /* REPLICATION */
-  return result;
+  DBUG_RETURN(result);
 }
 
 
