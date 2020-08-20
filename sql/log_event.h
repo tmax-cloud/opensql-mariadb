@@ -1229,7 +1229,7 @@ public:
   */
   uint16 flags;
 
-  uint16 cache_type;
+  enum_event_cache_type cache_type;
 
   /**
     A storage to cache the global system variable's value.

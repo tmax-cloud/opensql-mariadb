@@ -40,7 +40,7 @@ int check_that_all_fields_are_given_values(THD *thd, TABLE *entry,
 int vers_insert_history_row(TABLE *table);
 int write_record(THD *thd, TABLE *table, COPY_INFO *info);
 void kill_delayed_threads(void);
-bool binlog_create_table(THD *thd, TABLE *table);
+bool binlog_create_table(THD *thd, TABLE *table, bool replace);
 bool binlog_drop_table(THD *thd, TABLE *table);
 
 #ifdef EMBEDDED_LIBRARY
