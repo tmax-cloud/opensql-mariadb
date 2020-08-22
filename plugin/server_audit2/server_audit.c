@@ -597,22 +597,30 @@ static struct st_mysql_show_var audit_status[]=
   {0,0,0}
 };
 
+
 #if defined(HAVE_PSI_INTERFACE) && !defined(FLOGGER_NO_PSI)
 /* These belong to the service initialization */
-static PSI_mutex_key key_LOCK_operations;
 static PSI_mutex_key key_LOCK_atomic;
 static PSI_mutex_key key_LOCK_bigbuffer;
+#endif
+
+#ifdef HAVE_PSI_INTERFACE
+static PSI_mutex_key key_LOCK_operations;
 static PSI_mutex_info mutex_key_list[]=
 {
   { &key_LOCK_operations, "SERVER_AUDIT_plugin::lock_operations",
-    PSI_FLAG_GLOBAL},
+    PSI_FLAG_GLOBAL}
+#ifndef FLOGGER_NO_PSI
+  ,
   { &key_LOCK_atomic, "SERVER_AUDIT_plugin::lock_atomic",
     PSI_FLAG_GLOBAL},
   { &key_LOCK_bigbuffer, "SERVER_AUDIT_plugin::lock_bigbuffer",
     PSI_FLAG_GLOBAL}
+#endif /*FLOGGER_NO_PSI*/
 };
-#endif
-static mysql_mutex_t lock_operations;
+#endif /*HAVE_PSI_INTERFACE*/
+
+static mysql_prlock_t lock_operations;
 static mysql_mutex_t lock_atomic;
 static mysql_mutex_t lock_bigbuffer;
 
@@ -1722,7 +1730,7 @@ static int write_log(const char *message, size_t len, int take_lock)
 {
   int result= 0;
   if (take_lock)
-    flogger_mutex_lock(&lock_operations);
+    mysql_prlock_rdlock(&lock_operations);
 
   if (output_type == OUTPUT_FILE)
   {
@@ -1740,7 +1748,7 @@ static int write_log(const char *message, size_t len, int take_lock)
   }
 exit:
   if (take_lock)
-    flogger_mutex_unlock(&lock_operations);
+    mysql_prlock_unlock(&lock_operations);
   return result;
 }
 
@@ -2234,7 +2242,7 @@ void auditing(MYSQL_THD thd, unsigned int event_class, const void *ev)
   if (!(cn= get_loc_info(thd)))
     return;
 
-  flogger_mutex_lock(&lock_operations);
+  mysql_prlock_rdlock(&lock_operations);
 
   if (event_class == MYSQL_AUDIT_GENERAL_CLASS)
   {
@@ -2400,7 +2408,7 @@ void auditing(MYSQL_THD thd, unsigned int event_class, const void *ev)
     }
   }
 
-  flogger_mutex_unlock(&lock_operations);
+  mysql_prlock_unlock(&lock_operations);
 }
 
 
@@ -2528,11 +2536,11 @@ static int server_audit_init(void *p __attribute__((unused)))
   servhost_len= (uint)strlen(servhost);
 
   logger_init_mutexes();
-#if defined(HAVE_PSI_INTERFACE) && !defined(FLOGGER_NO_PSI)
+#ifdef HAVE_PSI_INTERFACE
   if (PSI_server)
     PSI_server->register_mutex("server_audit", mutex_key_list, 1);
 #endif
-  flogger_mutex_init(key_LOCK_operations, &lock_operations, MY_MUTEX_INIT_FAST);
+  mysql_prlock_init(key_LOCK_operations, &lock_operations);
   flogger_mutex_init(key_LOCK_operations, &lock_bigbuffer, MY_MUTEX_INIT_FAST);
   flogger_mutex_init(key_LOCK_atomic, &lock_atomic, MY_MUTEX_INIT_FAST);
 
@@ -2600,7 +2608,7 @@ static int server_audit_deinit(void *p __attribute__((unused)))
     closelog();
 
   (void) free(big_buffer);
-  flogger_mutex_destroy(&lock_operations);
+  mysql_prlock_destroy(&lock_operations);
   flogger_mutex_destroy(&lock_bigbuffer);
   flogger_mutex_destroy(&lock_atomic);
 
@@ -2634,7 +2642,7 @@ static void do_reload_filters(MYSQL_THD thd  __attribute__((unused)),
   struct user_def *old_user_list;
 
   ADD_ATOMIC(internal_stop_logging, 1);
-  flogger_mutex_lock(&lock_operations);
+  mysql_prlock_wrlock(&lock_operations);
 
   old_filter_list= filter_list;
   old_default_filter= default_filter;
@@ -2661,7 +2669,7 @@ static void do_reload_filters(MYSQL_THD thd  __attribute__((unused)),
     free_filters_ex(&old_filter_list, &old_default_filter, &old_user_list);
   }
 
-  flogger_mutex_unlock(&lock_operations);
+  mysql_prlock_unlock(&lock_operations);
   ADD_ATOMIC(internal_stop_logging, -1);
 }
 
@@ -2729,7 +2737,7 @@ static void update_file_path(MYSQL_THD thd,
   char *new_name= (*(char **) save) ? *(char **) save : empty_str;
 
   ADD_ATOMIC(internal_stop_logging, 1);
-  flogger_mutex_lock(&lock_operations);
+  mysql_prlock_wrlock(&lock_operations);
   error_header();
   fprintf(stderr, "Log file name was changed to '%s'.\n", new_name);
 
@@ -2761,7 +2769,7 @@ static void update_file_path(MYSQL_THD thd,
   path_buffer[sizeof(path_buffer)-1]= 0;
   file_path= path_buffer;
 exit_func:
-  flogger_mutex_unlock(&lock_operations);
+  mysql_prlock_unlock(&lock_operations);
   ADD_ATOMIC(internal_stop_logging, -1);
 }
 
@@ -2779,9 +2787,9 @@ static void update_file_rotations(MYSQL_THD thd  __attribute__((unused)),
   if (!logging || output_type != OUTPUT_FILE)
     return;
 
-  flogger_mutex_lock(&lock_operations);
+  mysql_prlock_wrlock(&lock_operations);
   logfile->rotations= rotations;
-  flogger_mutex_unlock(&lock_operations);
+  mysql_prlock_unlock(&lock_operations);
 }
 
 
@@ -2811,9 +2819,9 @@ static void update_file_rotate_size(MYSQL_THD thd  __attribute__((unused)),
   if (!logging || output_type != OUTPUT_FILE)
     return;
 
-  flogger_mutex_lock(&lock_operations);
+  mysql_prlock_wrlock(&lock_operations);
   logfile->size_limit= file_rotate_size;
-  flogger_mutex_unlock(&lock_operations);
+  mysql_prlock_unlock(&lock_operations);
 }
 
 
@@ -2826,7 +2834,7 @@ static void update_output_type(MYSQL_THD thd,
     return;
 
   ADD_ATOMIC(internal_stop_logging, 1);
-  flogger_mutex_lock(&lock_operations);
+  mysql_prlock_wrlock(&lock_operations);
   if (logging)
   {
     log_config(thd, "output_type", output_type_names[new_output_type]);
@@ -2840,7 +2848,7 @@ static void update_output_type(MYSQL_THD thd,
 
   if (logging)
     start_logging(thd);
-  flogger_mutex_unlock(&lock_operations);
+  mysql_prlock_unlock(&lock_operations);
   ADD_ATOMIC(internal_stop_logging, -1);
 }
 
@@ -2888,7 +2896,7 @@ static void update_logging(MYSQL_THD thd,
     return;
 
   ADD_ATOMIC(internal_stop_logging, 1);
-  flogger_mutex_lock(&lock_operations);
+  mysql_prlock_wrlock(&lock_operations);
   log_config(thd, "logging", "OFF");
   if ((logging= new_logging))
   {
@@ -2914,7 +2922,7 @@ static void update_logging(MYSQL_THD thd,
     stop_logging();
   }
 
-  flogger_mutex_unlock(&lock_operations);
+  mysql_prlock_unlock(&lock_operations);
   ADD_ATOMIC(internal_stop_logging, -1);
 }
 
@@ -2929,7 +2937,7 @@ static void update_mode(MYSQL_THD thd  __attribute__((unused)),
     return;
 
   if (!maria_55_started || !debug_server_started)
-    flogger_mutex_lock(&lock_operations);
+    mysql_prlock_wrlock(&lock_operations);
 
   log_config(thd, "mode", new_mode ? "1" : "0");
 
@@ -2937,7 +2945,7 @@ static void update_mode(MYSQL_THD thd  __attribute__((unused)),
   fprintf(stderr, "Logging mode was changed from %d to %d.\n", mode, new_mode);
   mode= new_mode;
   if (!maria_55_started || !debug_server_started)
-    flogger_mutex_unlock(&lock_operations);
+    mysql_prlock_unlock(&lock_operations);
 }
 
 
@@ -2953,13 +2961,13 @@ static void update_syslog_ident(MYSQL_THD thd  __attribute__((unused)),
   log_config(thd, "syslog_ident", syslog_ident);
   error_header();
   fprintf(stderr, "SYSYLOG ident was changed to '%s'\n", syslog_ident);
-  flogger_mutex_lock(&lock_operations);
+  mysql_prlock_wrlock(&lock_operations);
   if (logging && output_type == OUTPUT_SYSLOG)
   {
     stop_logging();
     start_logging(thd);
   }
-  flogger_mutex_unlock(&lock_operations);
+  mysql_prlock_unlock(&lock_operations);
   ADD_ATOMIC(internal_stop_logging, -1);
 }
 
