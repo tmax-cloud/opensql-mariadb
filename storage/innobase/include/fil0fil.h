@@ -647,6 +647,13 @@ struct fil_node_t {
 
 	/** Close the file handle. */
 	void close();
+
+  /** Same as close() but returns file handle instead of closing it. */
+  pfs_os_file_t detach() MY_ATTRIBUTE((warn_unused_result));
+
+private:
+  /** Does stuff common for close() and detach() */
+  void prepare_to_close_or_detach();
 };
 
 /** Value of fil_node_t::magic_n */
@@ -1199,8 +1206,11 @@ bool fil_table_accessible(const dict_table_t* table)
 /** Delete a tablespace and associated .ibd file.
 @param[in]	id		tablespace identifier
 @param[in]	if_exists	whether to ignore missing tablespace
+@param[in,out]	detached_handles	return detached handles if not nullptr
 @return	DB_SUCCESS or error */
-dberr_t fil_delete_tablespace(ulint id, bool if_exists= false);
+dberr_t fil_delete_tablespace(ulint id, bool if_exists= false,
+                              std::vector<pfs_os_file_t>* detached_handles
+                              =nullptr);
 
 /** Prepare to truncate an undo tablespace.
 @param[in]	space_id	undo tablespace id
