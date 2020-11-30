@@ -15,7 +15,7 @@
 
 
 #define PLUGIN_VERSION 0x200
-#define PLUGIN_STR_VERSION "2.0.2"
+#define PLUGIN_STR_VERSION "2.0.3"
 
 #define _my_thread_var loc_thread_var
 
@@ -96,6 +96,8 @@ static void closelog() {}
 LEX_STRING * thd_query_string (MYSQL_THD thd);
 unsigned long long thd_query_id(const MYSQL_THD thd);
 size_t thd_query_safe(MYSQL_THD thd, char *buf, size_t buflen);
+const char *thd_priv_user(MYSQL_THD thd,  size_t *length);
+const char *thd_priv_host(MYSQL_THD thd,  size_t *length);
 const char *thd_user_name(MYSQL_THD thd);
 const char *thd_client_host(MYSQL_THD thd);
 const char *thd_client_ip(MYSQL_THD thd);
@@ -1849,6 +1851,37 @@ static int log_uint_config(MYSQL_THD thd,
 }
 
 
+static int log_proxy(MYSQL_THD thd,
+                     const struct connection_info *cn,
+                     const struct mysql_event_connection *event)
+                   
+{
+  time_t ctime;
+  size_t csize;
+  char message[1024];
+
+  size_t proxy_user_len;
+  const char *proxy_user= thd_priv_user(thd, &proxy_user_len);
+  size_t proxy_host_len;
+  const char *proxy_host= thd_priv_host(thd, &proxy_host_len);
+
+  (void) time(&ctime);
+  csize= log_header(message, sizeof(message)-1, &ctime,
+                    servhost, servhost_len,
+                    cn->user, cn->user_len,
+                    cn->host, cn->host_len,
+                    cn->ip, cn->ip_len,
+                    event->thread_id, 0, "PROXY_CONNECT");
+  csize+= my_snprintf(message+csize, sizeof(message) - 1 - csize,
+    ",%.*s,`%.*s`@`%.*s`,%d", cn->db.length, cn->db.str,
+                     proxy_host_len, proxy_host,
+                     proxy_user_len, proxy_user,
+                     event->status);
+  message[csize]= '\n';
+  return write_log(message, csize + 1, 1);
+}
+
+
 static int log_connection(const struct connection_info *cn,
                           const struct mysql_event_connection *event,
                           const char *type,
@@ -2373,6 +2406,8 @@ void auditing(MYSQL_THD thd, unsigned int event_class, const void *ev)
       {
       case MYSQL_AUDIT_CONNECTION_CONNECT:
         log_connection(cn, event, event->status ? "FAILED_CONNECT": "CONNECT", "");
+        if (event->status == 0 && event->proxy_user && event->proxy_user[0])
+          log_proxy(thd, cn, event);
         break;
       case MYSQL_AUDIT_CONNECTION_DISCONNECT:
           log_connection_event(event, "DISCONNECT");
@@ -2388,6 +2423,8 @@ void auditing(MYSQL_THD thd, unsigned int event_class, const void *ev)
         my_snprintf(userbuf, sizeof(userbuf), "`%s`", user);
 
         log_connection(cn, event, "CHANGE_USER", userbuf);
+        if (event->proxy_user && event->proxy_user[0])
+          log_proxy(thd, cn, event);
         break;
       }
       default:;
