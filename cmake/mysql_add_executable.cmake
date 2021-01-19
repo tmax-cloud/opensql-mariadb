@@ -1,5 +1,5 @@
 # Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
-# 
+#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; version 2 of the License.
@@ -36,7 +36,7 @@ FUNCTION (MYSQL_ADD_EXECUTABLE)
   )
   LIST(GET ARG_UNPARSED_ARGUMENTS 0 target)
   LIST(REMOVE_AT  ARG_UNPARSED_ARGUMENTS 0)
-  
+
   SET(sources ${ARG_UNPARSED_ARGUMENTS})
   ADD_VERSION_INFO(${target} EXECUTABLE sources)
 
@@ -79,7 +79,14 @@ FUNCTION (MYSQL_ADD_EXECUTABLE)
     IF (COMP MATCHES ${SKIP_COMPONENTS})
       RETURN()
     ENDIF()
+    IF (WITH_STRIPPED_CLIENT AND NOT target STREQUAL mysqld)
+      INSTALL(CODE "SET(CMAKE_INSTALL_DO_STRIP 1)" ${COMP})
+      SET(reset_strip ON)
+    ENDIF()
     MYSQL_INSTALL_TARGETS(${target} DESTINATION ${ARG_DESTINATION} COMPONENT ${COMP})
+    IF (reset_strip)
+       INSTALL(CODE "SET(CMAKE_INSTALL_DO_STRIP 0)" ${COMP})
+    ENDIF()
   ENDIF()
 
   # create mariadb named symlink
