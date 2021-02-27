@@ -156,6 +156,8 @@ connection con12;
 connection default;
 SET DEBUG_SYNC= "now SIGNAL con11_cont";
 connection con11;
+Warnings:
+Warning	1639	debug sync point wait timed out
 connection default;
 Now crash the server
 SET SESSION debug_dbug="+d,crash_commit_after_log";
