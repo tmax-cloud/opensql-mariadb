@@ -15,7 +15,7 @@
 
 
 #define PLUGIN_VERSION 0x200
-#define PLUGIN_STR_VERSION "2.0.3"
+#define PLUGIN_STR_VERSION "2.0.4"
 
 #define _my_thread_var loc_thread_var
 
@@ -1728,19 +1728,42 @@ static char escaped_char(char c)
 }
 
 
+
+/*
+  Write to the log
+
+  @param take_lock  If set, take a read lock (or write lock on rotate).
+                    If not set, the caller has a already taken a write lock
+*/
+
 static int write_log(const char *message, size_t len, int take_lock)
 {
   int result= 0;
   if (take_lock)
+  {
+    /* Start by taking a read lock */
     mysql_prlock_rdlock(&lock_operations);
+  }
 
   if (output_type == OUTPUT_FILE)
   {
-    if (logfile &&
-        (is_active= (logger_write(logfile, message, len) == (int)len)))
-      goto exit;
-    ++log_write_failures;
-    result= 1;
+    if (logfile)
+    {
+      my_bool allow_rotate= !take_lock; /* Allow rotate if caller write lock */
+      if (take_lock && logger_time_to_rotate(logfile))
+      {
+        /* We have to rotate the log, change above read lock to write lock */
+        mysql_prlock_unlock(&lock_operations);
+        mysql_prlock_wrlock(&lock_operations);
+        allow_rotate= 1;
+      }
+      if (!(is_active= (logger_write_r(logfile, allow_rotate, message, len) ==
+                        (int) len)))
+      {
+        ++log_write_failures;
+        result= 1;
+      }
+    }
   }
   else if (output_type == OUTPUT_SYSLOG)
   {
@@ -1748,7 +1771,6 @@ static int write_log(const char *message, size_t len, int take_lock)
            syslog_priority_codes[syslog_priority],
            "%s %.*s", syslog_info, (int)len, message);
   }
-exit:
   if (take_lock)
     mysql_prlock_unlock(&lock_operations);
   return result;
