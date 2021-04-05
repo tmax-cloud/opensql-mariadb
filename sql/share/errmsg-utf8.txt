@@ -7993,4 +7993,4 @@ ER_REMOVED_ORPHAN_TRIGGER
 ER_STORAGE_ENGINE_DISABLED
         eng "Storage engine %s is disabled"
 ER_VERS_HIST_PART_FAILED
-        eng "Versioned table %`s.%`s: adding HISTORY partition failed"
+        eng "Versioned table %`s.%`s: adding HISTORY partition(s) failed"

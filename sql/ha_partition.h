@@ -1596,6 +1596,13 @@ public:
   }
 
   bool partition_engine() override { return 1;}
+
+  /**
+     Get the number of records in part_elem and its subpartitions, if any.
+     Also sets read_partitions bit for each partition id it uses (that is needed
+     for vers_set_hist_part() because it is called before read_partitions bitmap
+     is initialized).
+  */
   ha_rows part_records(partition_element *part_elem)
   {
     DBUG_ASSERT(m_part_info);
