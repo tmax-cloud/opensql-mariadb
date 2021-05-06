@@ -933,7 +933,7 @@ void close_thread_table(THD *thd, TABLE **table_ptr)
   DBUG_PRINT("tcache", ("table: '%s'.'%s' %p", table->s->db.str,
                         table->s->table_name.str, table));
   DBUG_ASSERT(!table->file->keyread_enabled());
-  DBUG_ASSERT(!table->file || table->file->inited == handler::NONE);
+  DBUG_ASSERT(table->file->inited == handler::NONE);
 
   /*
     The metadata lock must be released after giving back
@@ -945,11 +945,8 @@ void close_thread_table(THD *thd, TABLE **table_ptr)
                                              MDL_SHARED));
   table->mdl_ticket= NULL;
 
-  if (table->file)
-  {
-    table->file->update_global_table_stats();
-    table->file->update_global_index_stats();
-  }
+  table->file->update_global_table_stats();
+  table->file->update_global_index_stats();
 
   /*
     This look is needed to allow THD::notify_shared_lock() to
@@ -2226,6 +2223,7 @@ retry_share:
 
   table->init(thd, table_list);
 
+  DBUG_ASSERT(table != thd->open_tables);
   table->next= thd->open_tables;		/* Link into simple list */
   thd->set_open_tables(table);
 
@@ -2691,7 +2689,7 @@ unlink_all_closed_tables(THD *thd, MYSQL_LOCK *lock, size_t reopen_count)
   This is only needed when LOCK TABLES is active
 */
 
-void Locked_tables_list::mark_table_for_reopen(THD *thd, TABLE *table)
+void Locked_tables_list::mark_table_for_reopen(TABLE *table)
 {
   TABLE_SHARE *share= table->s;
 
@@ -2704,11 +2702,13 @@ void Locked_tables_list::mark_table_for_reopen(THD *thd, TABLE *table)
       close_all_tables_for_name().
     */
     if (table_list->table && table_list->table->s == share)
+    {
       table_list->table->internal_set_needs_reopen(true);
+      some_table_marked_for_reopen= 1;
+    }
   }
   /* This is needed in the case where lock tables where not used */
   table->internal_set_needs_reopen(true);
-  some_table_marked_for_reopen= 1;
 }
 
 
@@ -4455,6 +4455,9 @@ restart:
     /*
       For every table in the list of tables to open, try to find or open
       a table.
+
+      NOTE: there can be duplicates in the list. F.ex. table specified in
+      LOCK TABLES and prelocked via another table (like when used in a trigger).
     */
     for (tables= *table_to_open; tables;
          table_to_open= &tables->next_global, tables= tables->next_global)
@@ -4549,6 +4552,8 @@ restart:
         {
           if (ot_ctx.can_recover_from_failed_open())
           {
+            // FIXME: is this really used?
+            DBUG_ASSERT(0);
             close_tables_for_reopen(thd, start,
                                     ot_ctx.start_of_statement_svp());
             if (ot_ctx.recover_from_failed_open())
