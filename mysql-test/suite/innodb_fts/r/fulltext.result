@@ -707,6 +707,7 @@ SET sql_mode = DEFAULT;
 #
 CREATE TABLE t1 (a CHAR, FULLTEXT KEY(a)) ENGINE=InnoDB;
 ALTER TABLE t1 DISCARD TABLESPACE;
+FLUSH TABLES t1;
 ALTER TABLE t1 ADD FULLTEXT INDEX (a);
 Warnings:
 Warning	1814	Tablespace has been discarded for table `t1`
@@ -717,5 +718,7 @@ t1	CREATE TABLE `t1` (
   FULLTEXT KEY `a` (`a`),
   FULLTEXT KEY `a_2` (`a`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1
+Warnings:
+Warning	1814	Tablespace has been discarded for table `t1`
 DROP TABLE t1;
 # End of 10.3 tests
