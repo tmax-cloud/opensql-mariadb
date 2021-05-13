@@ -55,6 +55,9 @@ UNIV_INTERN uint srv_n_fil_crypt_threads_started = 0;
 /** At this age or older a space/page will be rotated */
 UNIV_INTERN uint srv_fil_crypt_rotate_key_age;
 
+/** Whether the encryption does key rotation */
+static std::atomic<bool> srv_encrypt_rotate;
+
 /** Condition variable for srv_n_fil_crypt_threads_started */
 static pthread_cond_t fil_crypt_cond;
 
@@ -136,6 +139,12 @@ fil_space_crypt_t::key_get_latest_version(void)
 		key_version = encryption_key_get_latest_version(key_id);
 		srv_stats.n_key_requests.inc();
 		key_found = key_version;
+		/* Encryption plugin is capable of doing key
+		version rotation */
+		if (key_version > srv_fil_crypt_rotate_key_age) {
+			srv_encrypt_rotate.store(
+				true, std::memory_order_relaxed);
+		}
 	}
 
 	return key_version;
@@ -1475,6 +1484,15 @@ inline fil_space_t *fil_system_t::keyrotate_next(fil_space_t *space,
   return nullptr;
 }
 
+/** If the encryption doesn't have key rotation age variable or
+can't rotate then the tablespace should be added to rotation list. */
+bool fil_crypt_enable_rotation_list()
+{
+  return !srv_fil_crypt_rotate_key_age ||
+         !srv_encrypt_rotate.load(std::memory_order_relaxed);
+}
+
+
 /** Determine the next tablespace for encryption key rotation.
 @param space    current tablespace (nullptr to start from the beginning)
 @param recheck  whether the removal condition needs to be rechecked after
@@ -1488,7 +1506,7 @@ space_list_t::iterator fil_space_t::next(space_list_t::iterator space,
 {
   mysql_mutex_lock(&fil_system.mutex);
 
-  if (!srv_fil_crypt_rotate_key_age)
+  if (fil_crypt_enable_rotation_list())
   {
     fil_space_t *next_space= fil_system.keyrotate_next(
         space != fil_system.space_list.end() ? &*space : nullptr, recheck,
@@ -2279,7 +2297,7 @@ void fil_crypt_set_encrypt_tables(ulong val)
   mysql_mutex_lock(&fil_system.mutex);
   srv_encrypt_tables= val;
 
-  if (srv_fil_crypt_rotate_key_age == 0)
+  if (fil_crypt_enable_rotation_list())
     fil_crypt_rotation_list_fill();
 
   mysql_mutex_unlock(&fil_system.mutex);
