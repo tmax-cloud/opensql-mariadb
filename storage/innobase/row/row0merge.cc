@@ -2561,19 +2561,20 @@ write_buffers:
 				that the buffer has been written out
 				and emptied. */
 
-				if (UNIV_UNLIKELY
-				    (!(rows_added = row_merge_buf_add(
+				rows_added = row_merge_buf_add(
 						buf, fts_index, old_table,
 						new_table, psort_info, row, ext,
-						&doc_id, conv_heap,
-						&err, &v_heap, eval_table, trx)))) {
-					/* An empty buffer should have enough
-					room for at least one record. */
-					ut_error;
-				}
+						&doc_id, conv_heap, &err, &v_heap,
+						eval_table, trx);
 
 				if (err != DB_SUCCESS) {
 					break;
+				}
+
+				if (rows_added == 0) {
+					/* An empty buffer should have enough
+					room for at least one record. */
+					ut_error;
 				}
 
 				file->n_rec += rows_added;
