@@ -515,7 +515,9 @@ row_merge_buf_add(
 	DBUG_ENTER("row_merge_buf_add");
 
 	if (buf->n_tuples >= buf->max_tuples) {
-		DBUG_RETURN(0);
+error:
+		n_row_added = 0;
+		goto end;
 	}
 
 	DBUG_EXECUTE_IF(
@@ -838,11 +840,6 @@ end:
         if (vcol_storage.innobase_record)
 		innobase_free_row_for_vcol(&vcol_storage);
 	DBUG_RETURN(n_row_added);
-
-error:
-        if (vcol_storage.innobase_record)
-		innobase_free_row_for_vcol(&vcol_storage);
-        DBUG_RETURN(0);
 }
 
 /*************************************************************//**
@@ -2687,14 +2684,16 @@ write_buffers:
 						&err, &v_heap, eval_table, trx)))) {
 					/* An empty buffer should have enough
 					room for at least one record. */
-					ut_error;
+					ut_ad(err == DB_COMPUTE_VALUE_FAILED
+					      || err == DB_OUT_OF_MEMORY
+					      || err == DB_TOO_BIG_RECORD);
+				} else if (err == DB_SUCCESS) {
+					file->n_rec += rows_added;
+					continue;
 				}
 
-				if (err != DB_SUCCESS) {
-					break;
-				}
-
-				file->n_rec += rows_added;
+				trx->error_key_num = i;
+				break;
 			}
 		}
 
