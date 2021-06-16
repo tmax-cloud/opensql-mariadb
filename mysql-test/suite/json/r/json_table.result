@@ -57,14 +57,14 @@ Jeans	{"color": "blue", "price": 50}	blue
 select * from t1 right join json_table(t1.item_props,'$' columns( color varchar(100) path '$.color')) as T on 1;
 ERROR 42S22: Unknown column 't1.item_props' in 'JSON_TABLE argument'
 DROP TABLE t1;
-select * from JSON_TABLE( '[ {"xa": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]', '$[*]' COLUMNS( a INT PATH '$.a' default '101' on empty, NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$'))) as jt;
+select * from JSON_TABLE( '[ {"xa": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]', '$[*]' COLUMNS( a INT PATH '$.a' default 101 on empty, NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$'))) as jt;
 a	b
 101	11
 101	111
 2	22
 2	222
 3	NULL
-select * from JSON_TABLE( '[ {"xa": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]', '$[*]' COLUMNS( a INT PATH '$.a' default '202' on error, NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$'))) as jt;
+select * from JSON_TABLE( '[ {"xa": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]', '$[*]' COLUMNS( a INT PATH '$.a' default 202 on error, NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$'))) as jt;
 a	b
 NULL	11
 NULL	111
@@ -85,6 +85,48 @@ a	b
 2	22
 2	222
 3	NULL
+select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default 0.5 on empty)) as T;
+col1
+0.5
+select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default 5 on empty)) as T;
+col1
+5
+select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default 'asdf' on empty)) as T;
+col1
+asdf
+select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default -0.5 on empty)) as T;
+col1
+-0.5
+select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default 18446744073709551615 on empty)) as T;
+col1
+18446744073709551615
+select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default DATE '2021-01-01' on empty)) as T;
+col1
+2021-01-01
+create view v as select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default 5 on empty)) as T;
+select * from v;
+col1
+5
+show create view v;
+View	Create View	character_set_client	collation_connection
+v	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v` AS select `T`.`col1` AS `col1` from JSON_TABLE('{"a": "b"}', '$' COLUMNS (`col1` varchar(32) PATH '$.fooo' DEFAULT 5 ON EMPTY)) `T`	latin1	latin1_swedish_ci
+drop view v;
+create view v as select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default 18446744073709551615 on empty)) as T;
+select * from v;
+col1
+18446744073709551615
+show create view v;
+View	Create View	character_set_client	collation_connection
+v	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v` AS select `T`.`col1` AS `col1` from JSON_TABLE('{"a": "b"}', '$' COLUMNS (`col1` varchar(32) PATH '$.fooo' DEFAULT 18446744073709551615 ON EMPTY)) `T`	latin1	latin1_swedish_ci
+drop view v;
+create view v as select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default 'asdf' on empty)) as T;
+select * from v;
+col1
+asdf
+show create view v;
+View	Create View	character_set_client	collation_connection
+v	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v` AS select `T`.`col1` AS `col1` from JSON_TABLE('{"a": "b"}', '$' COLUMNS (`col1` varchar(32) PATH '$.fooo' DEFAULT 'asdf' ON EMPTY)) `T`	latin1	latin1_swedish_ci
+drop view v;
 select * from JSON_TABLE( '[{"a": [1, 2], "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3} xx YY]', '$[*]' COLUMNS( a INT PATH '$.a' default '202' on error default '101' on empty, NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$'))) as jt;
 ERROR HY000: Syntax error in JSON text in argument 1 to function 'JSON_TABLE' at position 65
 select * from JSON_TABLE( '[{"a": [1, 2], "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]', '$[*]' COLUMNS( a INT PATH '$.a' error on error default '101' on empty, NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$'))) as jt;

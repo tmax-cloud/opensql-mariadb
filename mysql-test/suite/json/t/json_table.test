@@ -30,13 +30,33 @@ select * from t1 right join json_table(t1.item_props,'$' columns( color varchar(
 
 DROP TABLE t1;
 
-select * from JSON_TABLE( '[ {"xa": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]', '$[*]' COLUMNS( a INT PATH '$.a' default '101' on empty, NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$'))) as jt;
+select * from JSON_TABLE( '[ {"xa": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]', '$[*]' COLUMNS( a INT PATH '$.a' default 101 on empty, NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$'))) as jt;
 
-select * from JSON_TABLE( '[ {"xa": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]', '$[*]' COLUMNS( a INT PATH '$.a' default '202' on error, NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$'))) as jt;
+select * from JSON_TABLE( '[ {"xa": 1, "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]', '$[*]' COLUMNS( a INT PATH '$.a' default 202 on error, NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$'))) as jt;
 
 select * from JSON_TABLE( '[ {"a": [1, 2], "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]', '$[*]' COLUMNS( a INT PATH '$.a' default '101' on empty, NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$'))) as jt;
 
 select * from JSON_TABLE( '[ {"a": [1, 2], "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3}]', '$[*]' COLUMNS( a INT PATH '$.a' default '202' on error default '101' on empty, NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$'))) as jt;
+
+select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default 0.5 on empty)) as T;
+select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default 5 on empty)) as T;
+select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default 'asdf' on empty)) as T;
+select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default -0.5 on empty)) as T;
+select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default 18446744073709551615 on empty)) as T;
+select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default DATE '2021-01-01' on empty)) as T;
+
+create view v as select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default 5 on empty)) as T;
+select * from v;
+show create view v;
+drop view v;
+create view v as select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default 18446744073709551615 on empty)) as T;
+select * from v;
+show create view v;
+drop view v;
+create view v as select * from json_table('{"a": "b"}', '$' columns(col1 varchar(32) path '$.fooo' default 'asdf' on empty)) as T;
+select * from v;
+show create view v;
+drop view v;
 
 --error ER_JSON_SYNTAX
 select * from JSON_TABLE( '[{"a": [1, 2], "b": [11,111]}, {"a": 2, "b": [22,222]}, {"a":3} xx YY]', '$[*]' COLUMNS( a INT PATH '$.a' default '202' on error default '101' on empty, NESTED PATH '$.b[*]' COLUMNS (b INT PATH '$'))) as jt;

@@ -1500,6 +1500,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, size_t *yystacksize);
         simple_target_specification
         condition_number
         opt_versioning_interval_start
+        json_default_literal
 
 %type <item_param> param_marker
 
@@ -11659,6 +11660,8 @@ json_opt_on_empty_or_error:
         | json_on_empty_response json_on_error_response
         ;
 
+json_default_literal: literal | signed_literal;
+
 json_on_response:
           ERROR_SYM
           {
@@ -11668,12 +11671,10 @@ json_on_response:
           {
             $$.m_response= Json_table_column::RESPONSE_NULL;
           }
-        | DEFAULT json_text_literal
+        | DEFAULT json_default_literal
           {
             $$.m_response= Json_table_column::RESPONSE_DEFAULT;
             $$.m_default= $2;
-            Lex->json_table->m_cur_json_table_column->m_defaults_cs=
-                                    thd->variables.collation_connection;
           }
         ;
 
