@@ -180,6 +180,7 @@ from
   json_table(JS1.size, '$' columns (size INT PATH '$.size')) as JS2,
   json_table(JS1.size, '$' columns (size INT PATH '$.size')) as JS3 where  1;
 
+
 create table t1 (json varchar(100) character set utf8);
 insert into t1 values ('{"value":"АБВ"}');
 create table tj1 as 
@@ -814,6 +815,21 @@ select * from json_table('{"a":"foo", "b":1, "c":1000}', '$.*' columns(converted
  
 select * from json_table('{"a":"foo", "b":1, "c":1000}', '$.*' columns(converted tinyint path '$', original text path '$')) as jt order by original;
 
+#
+# MDEV-25875 SON_TABLE: extract document fragment into JSON column.
+#
+
+select * from
+  json_table('[{"color": "blue",  "price": { "high": 10, "low": 5}},
+               {"color": "white",   "price": "pretty low"},
+               {"color": "yellow",  "price": 256.20},
+               {"color": "red",   "price": { "high": 20, "low": 8}}]',
+             '$[*]' columns(color varchar(100) path '$.color',
+                          price json path '$.price'
+                        )
+             ) as T;
+
+select * from  json_table('{"foo": null}', '$' columns( jscol json path '$.foo')) as T;
 --echo #
 --echo # End of 10.6 tests
 --echo #
