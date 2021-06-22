@@ -613,4 +613,34 @@ DELETE FROM t1;
 
 DROP TEMPORARY TABLE t1;
 
+
+--echo #
+--echo # MDEV-18166 ASSERT_COLUMN_MARKED_FOR_READ failed on tables with vcols
+--echo #
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT,
+  f ENUM('a','b','c'),
+  v ENUM('a','b','c') AS (f),
+  KEY(v,id)
+) ENGINE=MyISAM;
+INSERT INTO t1 (f) VALUES ('a'),('b');
+INSERT IGNORE INTO t1 SELECT * FROM t1;
+
+# Cleanup
+DROP TABLE t1;
+
+
+CREATE TABLE t1 (
+  id INT NOT NULL AUTO_INCREMENT,
+  f ENUM('a','b','c'),
+  v ENUM('a','b','c') AS (f),
+  KEY(v,id)
+) ENGINE=MyISAM;
+INSERT INTO t1 (f) VALUES ('a'),('b');
+INSERT IGNORE INTO t1 SELECT * FROM t1;
+
+# Cleanup
+DROP TABLE t1;
+
 }
