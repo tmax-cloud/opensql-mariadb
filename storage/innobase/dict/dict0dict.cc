@@ -215,7 +215,7 @@ dict_remove_db_name(
 @param[in]	cached_only	whether to skip loading
 @return persistent table
 @retval	NULL if not found */
-static dict_table_t* dict_table_open_on_id_low(
+dict_table_t* dict_table_open_on_id_low(
 	table_id_t		table_id,
 	dict_err_ignore_t	ignore_err,
 	bool			cached_only)

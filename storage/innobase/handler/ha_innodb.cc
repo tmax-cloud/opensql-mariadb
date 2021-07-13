@@ -13280,17 +13280,15 @@ ha_innobase::discard_or_import_tablespace(
 	dict_sys.mutex_lock();
 	dict_table_close(m_prebuilt->table, TRUE, FALSE);
 	dict_sys.remove(m_prebuilt->table);
-	m_prebuilt->table = dict_table_open_on_id(id, TRUE,
-						  DICT_TABLE_OP_NORMAL);
+	m_prebuilt->table = dict_table_open_on_id_low(
+		id, DICT_ERR_IGNORE_ALL, false);
+	m_prebuilt->table->acquire();
 	dict_sys.mutex_unlock();
-	if (!m_prebuilt->table) {
-		err = DB_TABLE_NOT_FOUND;
-	} else {
-		if (const Field* ai = table->found_next_number_field) {
-			initialize_auto_increment(m_prebuilt->table, ai);
-		}
-		dict_stats_init(m_prebuilt->table);
-	}
+
+	if (const Field* ai = table->found_next_number_field)
+	  initialize_auto_increment(m_prebuilt->table, ai);
+
+	dict_stats_init(m_prebuilt->table);
 
 	if (dict_stats_is_persistent_enabled(m_prebuilt->table)) {
 		dberr_t		ret;

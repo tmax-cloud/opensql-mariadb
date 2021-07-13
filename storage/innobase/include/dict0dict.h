@@ -152,6 +152,17 @@ dict_table_open_on_id(table_id_t table_id, bool dict_locked,
                       MDL_ticket **mdl= nullptr)
   MY_ATTRIBUTE((warn_unused_result));
 
+/** Open a persistent table.
+@param[in]	table_id	persistent table identifier
+@param[in]	ignore_err	errors to ignore
+@param[in]	cached_only	whether to skip loading
+@return persistent table
+@retval	NULL if not found */
+dict_table_t* dict_table_open_on_id_low(
+	table_id_t		table_id,
+	dict_err_ignore_t	ignore_err,
+	bool			cached_only);
+
 /** Decrements the count of open handles of a table.
 @param[in,out]	table		table
 @param[in]	dict_locked	data dictionary locked
