@@ -3188,6 +3188,7 @@ my_bool Window_gtid_event_filter::exclude(rpl_gtid *gtid)
 }
 
 Id_delegating_gtid_event_filter::Id_delegating_gtid_event_filter()
+    : m_whitelist_set(FALSE), m_blacklist_set(FALSE)
 {
   uint32 i;
 
@@ -3241,6 +3242,104 @@ void Id_delegating_gtid_event_filter::set_default_filter(Gtid_event_filter *filt
     delete m_default_filter;
 
   m_default_filter= filter;
+}
+
+int Id_delegating_gtid_event_filter::set_blacklist(
+    gtid_filter_identifier *id_list, size_t n_ids)
+{
+  size_t id_ctr;
+  int err;
+
+  if (m_whitelist_set)
+  {
+    /*
+      Whitelist is already set, we can't do a blacklist and whitelist
+      together.
+    */
+    err= 1;
+    goto err;
+  }
+
+  for (id_ctr= 0; id_ctr < n_ids; id_ctr++)
+  {
+    gtid_filter_identifier filter_id= id_list[id_ctr];
+    gtid_filter_element *map_element=
+        find_or_create_filter_element_for_id(filter_id);
+
+    if (map_element->filter == NULL)
+    {
+      Identifiable_gtid_event_filter *rejecting_filter=
+          new Identifiable_gtid_event_filter(filter_id,
+                                             new Reject_all_gtid_filter());
+      map_element->filter= rejecting_filter;
+    }
+    else if (map_element->filter->get_filter_type() !=
+             REJECT_ALL_GTID_FILTER_TYPE)
+    {
+      /*
+        There is a different filter placed on an id that should be blacklisted.
+        Error.
+      */
+      err= 1;
+      goto err;
+    }
+  }
+
+  set_default_filter(new Accept_all_gtid_filter());
+  m_blacklist_set= TRUE;
+  err= 0;
+
+err:
+  return err;
+}
+
+int Id_delegating_gtid_event_filter::set_whitelist(
+    gtid_filter_identifier *id_list, size_t n_ids)
+{
+  size_t id_ctr;
+  int err;
+
+  if (m_blacklist_set)
+  {
+    /*
+      Blacklist is already set, we can't do a blacklist and whitelist
+      together.
+    */
+    err= 1;
+    goto err;
+  }
+
+  for (id_ctr= 0; id_ctr < n_ids; id_ctr++)
+  {
+    gtid_filter_identifier filter_id= id_list[id_ctr];
+    gtid_filter_element *map_element=
+        find_or_create_filter_element_for_id(filter_id);
+
+    if (map_element->filter == NULL)
+    {
+      Identifiable_gtid_event_filter *accepting_filter=
+          new Identifiable_gtid_event_filter(filter_id,
+                                             new Accept_all_gtid_filter());
+      map_element->filter= accepting_filter;
+    }
+    else if (map_element->filter->get_filter_type() !=
+             ACCEPT_ALL_GTID_FILTER_TYPE)
+    {
+      /*
+        There is a different filter placed on an id that should be whitelisted.
+        Error.
+      */
+      err= 1;
+      goto err;
+    }
+  }
+
+  set_default_filter(new Reject_all_gtid_filter());
+  m_whitelist_set= TRUE;
+  err= 0;
+
+err:
+  return err;
 }
 
 gtid_filter_element *
@@ -3369,4 +3468,10 @@ int Domain_gtid_event_filter::add_stop_gtid(rpl_gtid *gtid)
     err= filter_to_update->set_stop_gtid(gtid);
 
   return err;
+}
+
+my_bool Intersecting_gtid_event_filter::exclude(rpl_gtid *gtid)
+{
+  DBUG_ASSERT(m_filter1 && m_filter2);
+  return m_filter1->exclude(gtid) || m_filter2->exclude(gtid);
 }

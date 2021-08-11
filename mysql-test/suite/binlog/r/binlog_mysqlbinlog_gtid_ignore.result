@@ -1,0 +1,232 @@
+###############################
+#      Test Setup
+###############################
+SET timestamp=1000000000;
+RESET MASTER;
+CREATE TABLE t1 (a int);
+SET @@session.gtid_domain_id= 1;
+SET @@session.server_id= 1;
+INSERT INTO t1 values (1);
+SET @@session.server_id= 2;
+INSERT INTO t1 values (2);
+SET @@session.server_id= 3;
+INSERT INTO t1 values (3);
+SET @@session.gtid_domain_id= 2;
+SET @@session.server_id= 1;
+INSERT INTO t1 values (4);
+SET @@session.server_id= 2;
+INSERT INTO t1 values (5);
+SET @@session.server_id= 3;
+INSERT INTO t1 values (6);
+SET @@session.gtid_domain_id= 3;
+SET @@session.server_id= 1;
+INSERT INTO t1 values (7);
+SET @@session.server_id= 2;
+INSERT INTO t1 values (8);
+SET @@session.server_id= 3;
+INSERT INTO t1 values (9);
+FLUSH LOGS;
+###############################
+#      Test Cases
+###############################
+#
+#   Test Case 1:
+#   --ignore-domain-ids standalone
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --ignore-domain-ids=0,1,3 --base64-output=NEVER > OUT_FILE
+end_log_pos # CRC32 XXX 	Start: binlog v 4, server v #.##.## created 010909  9:46:40 at startup
+end_log_pos # CRC32 XXX 	GTID 2-1-1
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 2-2-2
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 2-3-3
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+#
+#   Test Case 2:
+#   --do-domain-ids standalone
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --do-domain-ids=0 --base64-output=NEVER > OUT_FILE
+end_log_pos # CRC32 XXX 	Start: binlog v 4, server v #.##.## created 010909  9:46:40 at startup
+end_log_pos # CRC32 XXX 	GTID 0-1-1 ddl
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+#
+#   Test Case 3:
+#   --ignore-server-ids standalone
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --ignore-server-ids=1,3 --base64-output=NEVER > OUT_FILE
+end_log_pos # CRC32 XXX 	Start: binlog v 4, server v #.##.## created 010909  9:46:40 at startup
+end_log_pos # CRC32 XXX 	GTID 1-2-2
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 2-2-2
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 3-2-2
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	Rotate to master-bin.000002  pos: 4
+#
+#   Test Case 4:
+#   --do-server-ids standalone
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --do-server-ids=1 --base64-output=NEVER > OUT_FILE
+end_log_pos # CRC32 XXX 	Start: binlog v 4, server v #.##.## created 010909  9:46:40 at startup
+end_log_pos # CRC32 XXX 	Gtid list []
+end_log_pos # CRC32 XXX 	Binlog checkpoint master-bin.000001
+end_log_pos # CRC32 XXX 	GTID 0-1-1 ddl
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 1-1-1
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 2-1-1
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 3-1-1
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	Rotate to master-bin.000002  pos: 4
+#
+#   Test Case 5:
+# --ignore-domain-ids with --ignore-server-ids intersects the datasets
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --ignore-server-ids=1,3 --ignore-domain-ids=1,2 --base64-output=NEVER > OUT_FILE
+end_log_pos # CRC32 XXX 	Start: binlog v 4, server v #.##.## created 010909  9:46:40 at startup
+end_log_pos # CRC32 XXX 	GTID 3-2-2
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+#
+#   Test Case 6:
+# --ignore-domain-ids with GTID range unions the datasets
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --do-domain-ids=2 --start-position=1-1-1 --stop-position=1-2-2 --base64-output=NEVER > OUT_FILE
+end_log_pos # CRC32 XXX 	Start: binlog v 4, server v #.##.## created 010909  9:46:40 at startup
+end_log_pos # CRC32 XXX 	GTID 1-2-2
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 2-1-1
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 2-2-2
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 2-3-3
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+#
+#   Test Case 7:
+# --ignore-server-ids with GTID range intersects the datasets
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --ignore-server-ids=2 --stop-position=1-3-3 --base64-output=NEVER > OUT_FILE
+end_log_pos # CRC32 XXX 	Start: binlog v 4, server v #.##.## created 010909  9:46:40 at startup
+end_log_pos # CRC32 XXX 	GTID 1-1-1
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 1-3-3
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+#
+#   Test Case 8:
+#   --ignore-domain-ids, --ignore-server-ids, and GTID range
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --do-domain-ids=0 --ignore-server-ids=2 --stop-position=1-3-3 --base64-output=NEVER > OUT_FILE
+end_log_pos # CRC32 XXX 	Start: binlog v 4, server v #.##.## created 010909  9:46:40 at startup
+end_log_pos # CRC32 XXX 	GTID 0-1-1 ddl
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 1-1-1
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 1-3-3
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+#
+#   Test Case 9:
+#   --server-id and --do-server-ids union results together
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --do-server-ids=1,2 --server-id=1 --base64-output=NEVER > OUT_FILE
+end_log_pos # CRC32 XXX 	Start: binlog v 4, server v #.##.## created 010909  9:46:40 at startup
+end_log_pos # CRC32 XXX 	Gtid list []
+end_log_pos # CRC32 XXX 	Binlog checkpoint master-bin.000001
+end_log_pos # CRC32 XXX 	GTID 0-1-1 ddl
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 1-1-1
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 1-2-2
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 2-1-1
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 2-2-2
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 3-1-1
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	GTID 3-2-2
+end_log_pos # CRC32 XXX 	Annotate_rows:
+end_log_pos # CRC32 XXX 	Table_map: `test`.`t1` mapped to number #
+end_log_pos # CRC32 XXX 	Write_rows: table id # flags: STMT_END_F
+end_log_pos # CRC32 XXX 	Query	thread_id=#	exec_time=#	error_code=0	xid=#
+end_log_pos # CRC32 XXX 	Rotate to master-bin.000002  pos: 4
+##############################
+#      Error Cases
+##############################
+#
+#   Error Case 1:
+#   --ignore-domain-ids and --do-domain-ids both specified
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --ignore-domain-ids=0 --do-domain-ids=1 --base64-output=NEVER  > OUT_FILE
+#
+#   Error Case 2:
+#   --ignore-server-ids and --do-server-ids both specified
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --ignore-server-ids=1 --do-server-ids=2 --base64-output=NEVER  > OUT_FILE
+#
+#   Error Case 3:
+#   --(ignore|do)-domain-ids and GTID range specified on the same domain
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1 --ignore-domain-ids=0 --base64-output=NEVER  > OUT_FILE
+##############################
+#      Cleanup
+##############################
+DROP TABLE t1;
+SET @@global.gtid_domain_id= 0;
+SET @@global.server_id= 1;
