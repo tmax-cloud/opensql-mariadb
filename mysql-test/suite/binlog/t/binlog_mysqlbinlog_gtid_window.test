@@ -1,0 +1,124 @@
+#
+# Purpose:
+#
+# This test ensures that the mariadb-binlog CLI tool can filter log events
+# using GTID ranges. More specifically, this test ensures the following
+# capabilities:
+#   1) GTIDs can be used to filter results on local binlog files
+#   2) GTIDs can be used to filter results from remote servers
+#   3) For a given GTID range, its start-position is exclusive and its
+#      stop-position is inclusive. This allows users to receive events strictly
+#      after those that they already have, and is useful in cases such as: 1)
+#      events were received out of order and should be re-sent, or 2)
+#      specifying the  gtid state of a slave to get events newer than their
+#      current state.
+#   4) After the events have been written, the session server id and domain id
+#      are reset to their former values
+#
+#
+# Methodology:
+#
+# This test validates the expected capabilities using the following test cases
+# on both a local binlog file and remote server for all binlog formats.
+#   Test Case 1) The end of the binlog file resets the server and domain id of
+#                the session
+#   Test Case 2) Single GTID range specified
+#   Test Case 3) Single GTID range with different server_ids
+#   Test Case 4) Multiple GTID ranges specified
+#   Test Case 5) Multiple GTID ranges specified where the domain ids are
+#                listed in different orders between start/stop position
+#   Test Case 6) Only start position specified
+#   Test Case 7) Only stop position specified
+#   Test Case 8) Seq_no=0 in --start-position includes all events for a domain
+#   Test Case 9) Seq_no=0 in --stop-position excludes all events for a domain
+#
+# To validate for data consistency, each test case compares a checksum of
+# correct data against a variant created after replaying the binlog using
+# --(start|stop)-position. If the checksums are identical, the test passes.
+# If the checksums differ, data has been changed and the test fails.
+#
+# Additionally, this test validates the following error scenarios:
+#   Error Case 1) User provides invalid positions
+#   Error Case 2) User provides GTID ranges with repeated domain ids
+#
+#
+# References:
+#   MDEV-4989: Support for GTID in mysqlbinlog
+#
+
+--source include/have_log_bin.inc
+
+--echo ###############################
+--echo #      Test Setup
+--echo ###############################
+
+## Save old state
+#
+let orig_gtid_domain_id = `select @@session.gtid_domain_id`;
+let orig_server_id = `select @@session.server_id`;
+
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+RESET MASTER;
+
+
+--echo ######################################
+--echo #      Test Group 1
+--echo #      Run test cases on local log file
+--echo ######################################
+--let is_remote= 0
+--source include/mysqlbinlog_gtid_window_test_cases.inc
+
+
+--echo ######################################
+--echo #      Test Group 2
+--echo #      Run test cases on remote host
+--echo ######################################
+--let is_remote= 1
+--source include/mysqlbinlog_gtid_window_test_cases.inc
+
+
+--echo ##############################
+--echo #      Error Cases
+--echo ##############################
+
+--let $MYSQLD_DATADIR=`select @@datadir`
+--echo #
+--echo #   Error Case 1:
+--echo #   User provides invalid positions
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=z --base64-output=NEVER
+--error 1
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=z --base64-output=NEVER
+
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=1- --base64-output=NEVER
+--error 1
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=1- --base64-output=NEVER
+
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=1-2 --base64-output=NEVER
+--error 1
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=1-2 --base64-output=NEVER
+
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=1-2- --base64-output=NEVER
+--error 1
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=1-2- --base64-output=NEVER
+
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=-1 --base64-output=NEVER
+--error 1
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=-1 --base64-output=NEVER
+
+--echo #
+--echo #   Error Case 2:
+--echo #   User provides GTID ranges with repeated domain ids
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1,0-1-8 --stop-position=0-1-4,0-1-12 --base64-output=NEVER
+--error 1
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1,0-1-8 --stop-position=0-1-4,0-1-12 --base64-output=NEVER
+
+
+--echo ##############################
+--echo #      Cleanup
+--echo ##############################
+DROP TABLE IF EXISTS t1;
+DROP TABLE IF EXISTS t2;
+--eval SET @@global.gtid_domain_id= $orig_gtid_domain_id
+--eval SET @@global.server_id= $orig_server_id
+
