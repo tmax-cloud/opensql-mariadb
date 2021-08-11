@@ -2123,8 +2123,11 @@ dispatch_command_return dispatch_command(enum enum_server_command command, THD *
   case COM_BINLOG_DUMP:
     {
       ulong pos;
+      uint32 n_start_gtids= 0;
+      rpl_gtid *start_gtids= NULL;
       ushort flags;
       uint32 slave_server_id;
+      uint32 unpack_idx= 0;
 
       status_var_increment(thd->status_var.com_other);
 
@@ -2133,19 +2136,42 @@ dispatch_command_return dispatch_command(enum enum_server_command command, THD *
 	break;
 
       /* TODO: The following has to be changed to an 8 byte integer */
-      pos = uint4korr(packet);
-      flags = uint2korr(packet + 4);
+      if (packet[4] == '-' && packet[9] == '-')
+      {
+        unpack_idx= 18;
+        while (packet[unpack_idx] == ',')
+          unpack_idx += 19; // 18 chars for gtid + 1 for comma
+        start_gtids= gtid_unpack_string_to_list(packet, unpack_idx, &n_start_gtids);
+
+        /*
+          Set pos to the start of the binlog file for scanning
+
+          TODO: When GTID indexing is complete (MDEV-4991), update pos by
+          looking it up in the index
+         */
+        pos= 4;
+      } /* if (packet[4] == '-' && packet[9] == '-') */
+      else
+      {
+        /* Single numeric log position case */
+        pos = uint4korr(packet);
+        unpack_idx += 4;
+      }
+      flags = uint2korr(packet + unpack_idx);
+      unpack_idx += 2;
       thd->variables.server_id=0; /* avoid suicide */
-      if ((slave_server_id= uint4korr(packet+6))) // mysqlbinlog.server_id==0
+      if ((slave_server_id= uint4korr(packet+unpack_idx))) // mysqlbinlog.server_id==0
 	kill_zombie_dump_threads(slave_server_id);
       thd->variables.server_id = slave_server_id;
+      unpack_idx += 4;
 
-      const char *name= packet + 10;
+      const char *name= packet + unpack_idx;
       size_t nlen= strlen(name);
 
       general_log_print(thd, command, "Log: '%s'  Pos: %lu", name, pos);
       if (nlen < FN_REFLEN)
-        mysql_binlog_send(thd, thd->strmake(name, nlen), (my_off_t)pos, flags);
+        mysql_binlog_send(thd, thd->strmake(name, nlen), (my_off_t)pos, flags,
+                          start_gtids, n_start_gtids);
       thd->unregister_slave(); // todo: can be extraneous
       /*  fake COM_QUIT -- if we get here, the thread needs to terminate */
       error = TRUE;

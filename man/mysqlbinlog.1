@@ -992,8 +992,13 @@ This option is useful for point\-in\-time recovery\&.
 \fB\-\-start\-position=\fR\fB\fIN\fR\fR,
 \fB\-j \fR\fB\fIN\fR\fR
 .sp
-Start reading the binary log at the first event having a position equal to or greater than
-\fIN\fR\&. This option applies to the first log file named on the command line\&.
+Start reading the binary log at \fIN\fR\&. Type can either be a positive
+integer or a GTID\& list\&. When using a positive integer, the value only
+applies to the first binlog passed on the command line, and the first event
+that has a position equal to or greater than \fIN\fR is printed\&. In GTID mode,
+multiple GTIDs can be passed as a comma separated list, where each must have a
+unique domain id\&. Additionally, only events with GTIDs greater than those
+passed in \fIN\fR are printed\&.
 .sp
 This option is useful for point\-in\-time recovery\&.
 .RE
@@ -1063,8 +1068,11 @@ The slave server_id used for \fB--read-from-remote-server --stop-never\fR\&.
 .\" stop-position option: mysqlbinlog
 \fB\-\-stop\-position=\fR\fB\fIN\fR\fR
 .sp
-Stop reading the binary log at the first event having a position equal to or greater than
-\fIN\fR\&. This option applies to the last log file named on the command line\&.
+Stop reading the binary log at the first event having a position equal to or
+greater than \fIN\fR\&. Type can either be a positive integer or a GTID
+list\&. When using a positive integer, the value only applies to the last log
+file named on the command line\&. When in GTID mode, multiple GTIDs can be
+passed as a comma separated list, where each must have a unique domain id\&.
 .sp
 This option is useful for point\-in\-time recovery\&.
 .RE

@@ -57,7 +57,8 @@ struct LOAD_FILE_IO_CACHE : public IO_CACHE
 
 int log_loaded_block(IO_CACHE* file, uchar *Buffer, size_t Count);
 int init_replication_sys_vars();
-void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos, ushort flags);
+void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos, ushort flags,
+                       rpl_gtid *start_gtids, uint32 n_start_gtids);
 
 #ifdef HAVE_PSI_INTERFACE
 extern PSI_mutex_key key_LOCK_slave_state, key_LOCK_binlog_state;
