@@ -1187,6 +1187,10 @@ struct dict_index_t{
 	bool
 	vers_history_row(const rec_t* rec, bool &history_row);
 
+	/** @return true if table is system versioned and the index is
+	FTS_DOC_ID_INDEX */
+	bool vers_skip_fts_doc_id() const;
+
   /** Assign the number of new column to be added as a part
   of the index
   @param        n_vcol  number of virtual columns to be added */
