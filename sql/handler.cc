@@ -1740,6 +1740,19 @@ int ha_commit_trans(THD *thd, bool all)
                    thd->lex->alter_info.flags & ALTER_ADD_SYSTEM_VERSIONING &&
                    is_real_trans))
   {
+    /*
+      Apply buffered insert operation at the end of single
+      statement commit operation.
+    */
+    for (Ha_trx_info *ha_info= trans->ha_list; ha_info;
+         ha_info= ha_info->next())
+    {
+      if (!ha_info->ht()->bulk_insert_write ||
+          !ha_info->ht()->bulk_insert_write(thd))
+        continue;
+      goto err;
+    }
+
     ulonglong trx_start_id= 0, trx_end_id= 0;
     for (Ha_trx_info *ha_info= trans->ha_list; ha_info; ha_info= ha_info->next())
     {
