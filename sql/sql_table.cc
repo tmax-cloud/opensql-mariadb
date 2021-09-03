@@ -1477,6 +1477,7 @@ int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables,
       }
       else
       {
+        param.rename_flags= FN_TO_IS_TMP;
         if (close_or_remove_table(thd, table) ||
             rename_do(thd, &param, ddl_log_state_create, table,
                       &table->db, false, &force_if_exists))
@@ -1560,8 +1561,13 @@ int mysql_rm_table_no_locks(THD *thd, TABLE_LIST *tables,
         res= ddl_log_drop_view(thd, ddl_log_state, &cpath, &db,
                                &table_name);
       else
+      {
         res= ddl_log_drop_table(thd, ddl_log_state, hton, &cpath, &db,
                                 &table_name);
+        if (ddl_log_state_create)
+          ddl_log_add_flag(ddl_log_state, DDL_LOG_FLAG_TMP_TABLE);
+      }
+
       if (res)
       {
         error= -1;

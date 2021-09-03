@@ -720,3 +720,10 @@ test	t2	1	0
 unlock tables;
 drop procedure sp;
 drop tables t1, t2, t3;
+# Trigger
+create table t1 (a int);
+create trigger a before insert on t1 for each row set @s= 1;
+create or replace table t1 (old int);
+show create trigger a;
+ERROR HY000: Trigger does not exist
+drop table t1;

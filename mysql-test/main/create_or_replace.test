@@ -565,3 +565,10 @@ call sp; call sp;
 unlock tables;
 drop procedure sp;
 drop tables t1, t2, t3;
+--echo # Trigger
+create table t1 (a int);
+create trigger a before insert on t1 for each row set @s= 1;
+create or replace table t1 (old int);
+--error ER_TRG_DOES_NOT_EXIST
+show create trigger a;
+drop table t1;

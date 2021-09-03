@@ -367,7 +367,8 @@ rename_do(THD *thd, rename_param *param, DDL_LOG_STATE *ddl_log_state,
 
     debug_crash_here("ddl_log_rename_before_rename_table");
     if (!(rc= mysql_rename_table(hton, &ren_table->db, old_alias,
-                                 new_db, new_alias, &param->old_version, 0)))
+                                 new_db, new_alias, &param->old_version,
+                                 param->rename_flags)))
     {
       /* Table rename succeded.
          It's safe to start recovery at rename trigger phase

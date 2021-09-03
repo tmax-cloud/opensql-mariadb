@@ -177,6 +177,10 @@ struct rename_param
   LEX_CSTRING old_alias, new_alias;
   LEX_CUSTRING old_version;
   handlerton *from_table_hton;
+  int rename_flags; /* FN_FROM_IS_TMP, FN_TO_IS_TMP, etc */
+  rename_param() :
+    from_table_hton(NULL),
+    rename_flags(0) {}
 };
 bool
 rename_do(THD *thd, rename_param *param, DDL_LOG_STATE *ddl_log_state,

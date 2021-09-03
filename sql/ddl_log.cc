@@ -1292,6 +1292,7 @@ static int ddl_log_execute_action(THD *thd, MEM_ROOT *mem_root,
   ddl_log_error_handler no_such_table_handler;
   uint entry_pos= ddl_log_entry->entry_pos;
   int error;
+  uint flags;
   bool frm_action= FALSE;
   DBUG_ENTER("ddl_log_execute_action");
 
@@ -1575,8 +1576,15 @@ static int ddl_log_execute_action(THD *thd, MEM_ROOT *mem_root,
         break;
       /* Fall through */
     case DDL_DROP_PHASE_TRIGGER:
+      /*
+        Note: frm is already deleted and build_table_filename() will not detect
+        FN_IS_TMP flag.
+      */
+      flags= (ddl_log_entry->flags & DDL_LOG_FLAG_TMP_TABLE) ? FN_IS_TMP : 0;
+
       Table_triggers_list::drop_all_triggers(thd, &db, &table,
-                                             MYF(MY_WME | MY_IGNORE_ENOENT));
+                                             MYF(MY_WME | MY_IGNORE_ENOENT),
+                                             flags);
       if (increment_phase(entry_pos))
         break;
       /* Fall through */
@@ -3161,7 +3169,10 @@ static bool ddl_log_drop(THD *thd, DDL_LOG_STATE *ddl_state,
   ddl_log_entry.tmp_name=     *const_cast<LEX_CSTRING*>(path);
   ddl_log_entry.phase=        (uchar) phase;
   if (ddl_state->skip_binlog)
+  {
     ddl_log_entry.flags= DDL_LOG_FLAG_DROP_SKIP_BINLOG;
+    ddl_state->flags|= DDL_LOG_FLAG_DROP_SKIP_BINLOG;
+  }
 
   mysql_mutex_lock(&LOCK_gdl);
   if (ddl_log_write_entry(&ddl_log_entry, &log_entry))
