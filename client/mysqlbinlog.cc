@@ -2384,16 +2384,11 @@ static Exit_status dump_log_entries(const char* logname)
   @retval ERROR_STOP An error occurred - the program should terminate.
   @retval OK_CONTINUE No error, the program should continue.
 */
-static Exit_status check_master_version(uint *major, uint *minor, uint *patch,
-                                        my_bool *version_extracted)
+static Exit_status check_master_version()
 {
   MYSQL_RES* res = 0;
   MYSQL_ROW row;
   uint version;
-  size_t version_iter;
-
-  // Assume no problems extracting the master version
-  *version_extracted= TRUE;
 
   if (mysql_query(mysql, "SELECT VERSION()") ||
       !(res = mysql_store_result(mysql)))
@@ -2409,52 +2404,12 @@ static Exit_status check_master_version(uint *major, uint *minor, uint *patch,
     goto err;
   }
 
-  if (!(*major = atoi(row[0])))
+  if (!(version = atoi(row[0])))
   {
     error("Could not find server version: "
           "Master reported NULL for the version.");
     goto err;
   }
-
-  /* Try to save the minor version, if supplied with a storage location */
-  if (minor != NULL || patch != NULL)
-  {
-    for (version_iter= 0; version_iter < strlen((const char *) row);
-         version_iter++)
-    {
-      if (row[0][version_iter] == '.')
-      {
-        version_iter= version_iter + 1;
-        break;
-      }
-    }
-    if (minor != NULL && !(*minor= atoi(&row[0][version_iter])))
-    {
-      warning("Could not extract minor version from MariaDB master version %s", row[0]);
-      *version_extracted= FALSE;
-    }
-  }
-
-  /* Try to save the patch version, if supplied with a storage location */
-  if (patch != NULL)
-  {
-    for (; version_iter < strlen((const char *) row); version_iter++)
-    {
-      if (row[0][version_iter] == '.')
-      {
-        version_iter= version_iter + 1;
-        break;
-      }
-    }
-    if (!(*patch= atoi(&row[0][version_iter])))
-    {
-      warning("Could not extract patch version from MariaDB master version %s", row[0]);
-      *version_extracted= FALSE;
-    }
-  }
-
-  version= *major;
-
   /* 
      Make a notice to the server that this client
      is checksum-aware. It does not need the first fake Rotate
@@ -2478,6 +2433,36 @@ static Exit_status check_master_version(uint *major, uint *minor, uint *patch,
     error("Could not inform master about capability. Master returned '%s'",
           mysql_error(mysql));
     goto err;
+  }
+
+  if (n_start_gtid_ranges > 0)
+  {
+    char str_buf[256];
+    String query_str(str_buf, sizeof(str_buf), system_charset_info);
+    query_str.length(0);
+    query_str.append(STRING_WITH_LEN("SET @slave_connect_state='"),
+                     system_charset_info);
+
+    for (uint32 gtid_idx = 0; gtid_idx < n_start_gtid_ranges; gtid_idx++)
+    {
+      char buf[256];
+      rpl_gtid *start_gtid= &start_gtids[gtid_idx];
+
+      sprintf(buf, "%u-%u-%llu",
+              start_gtid->domain_id, start_gtid->server_id,
+              start_gtid->seq_no);
+      query_str.append(buf, strlen(buf));
+      if (gtid_idx < n_start_gtid_ranges - 1)
+        query_str.append(',');
+    }
+
+    query_str.append(STRING_WITH_LEN("'"), system_charset_info);
+    if (unlikely(mysql_real_query(mysql, query_str.ptr(), query_str.length())))
+    {
+      error("Setting @slave_connect_state failed with error: %s",
+            mysql_error(mysql));
+      goto err;
+    }
   }
 
   delete glob_description_event;
@@ -2798,63 +2783,21 @@ static Exit_status dump_remote_log_entries(PRINT_EVENT_INFO *print_event_info,
     DBUG_RETURN(retval);
   net= &mysql->net;
 
-  uint major_version, minor_version;
-  my_bool was_version_extracted= TRUE; // Assume true to start
-  if ((retval= check_master_version(&major_version, &minor_version, NULL,
-                                    &was_version_extracted)) != OK_CONTINUE)
+  if ((retval= check_master_version()) != OK_CONTINUE)
     DBUG_RETURN(retval);
 
   /*
     COM_BINLOG_DUMP accepts only 4 bytes for the position, so we are forced to
     cast to uint32.
   */
-  size_t buf_idx= 0;
-  if (is_gtid_filtering_enabled() && n_start_gtid_ranges > 0)
-  {
-    if (was_version_extracted &&
-        (major_version < 10 || (major_version == 10 && minor_version < 7)))
-    {
-      error("Master does not support GTID filtering. This feature was added "
-            "in MariaDB version 10.7.");
-      DBUG_RETURN(ERROR_STOP);
-    }
-    else if (!was_version_extracted)
-    {
-      warning("Could not extract complete MariaDB version from master. Trying "
-              "to use GTID filtering, but it is not guaranteed that the "
-              "master supports it (must be 10.7+).");
-    }
-
-    size_t i;
-    for (i = 0; i < n_start_gtid_ranges; i++)
-    {
-      if (i > 0)
-      {
-        buf[buf_idx]= ',';
-        buf_idx += 1;
-      }
-
-      int4store(buf + buf_idx, start_gtids[i].domain_id);
-      buf[buf_idx+4]= '-';
-      int4store(buf + buf_idx + 5, start_gtids[i].server_id);
-      buf[buf_idx+9]= '-';
-      int8store(buf + buf_idx + 10, start_gtids[i].seq_no);
-      buf_idx += 18;
-    }
-  }
-  else
-  {
-    DBUG_ASSERT(start_position <= UINT_MAX32);
-    int4store(buf, (uint32) start_position);
-    buf_idx= BIN_LOG_HEADER_SIZE;
-  }
+  DBUG_ASSERT(start_position <= UINT_MAX32);
+  int4store(buf, (uint32)start_position);
   if (!opt_skip_annotate_row_events)
     binlog_flags|= BINLOG_SEND_ANNOTATE_ROWS_EVENT;
   if (!opt_stop_never)
     binlog_flags|= BINLOG_DUMP_NON_BLOCK;
 
-  int2store(buf + buf_idx, binlog_flags);
-  buf_idx += 2;
+  int2store(buf + BIN_LOG_HEADER_SIZE, binlog_flags);
 
   size_t tlen = strlen(logname);
   if (tlen > sizeof(buf) - 10)
@@ -2871,10 +2814,9 @@ static Exit_status dump_remote_log_entries(PRINT_EVENT_INFO *print_event_info,
   }
   else
     slave_id= 0;
-  int4store(buf + buf_idx, slave_id);
-  buf_idx += 4;
-  memcpy(buf + buf_idx, logname, logname_len);
-  if (simple_command(mysql, COM_BINLOG_DUMP, buf, logname_len + buf_idx, 1))
+  int4store(buf + 6, slave_id);
+  memcpy(buf + 10, logname, logname_len);
+  if (simple_command(mysql, COM_BINLOG_DUMP, buf, logname_len + 10, 1))
   {
     error("Got fatal error sending the log dump command.");
     DBUG_RETURN(ERROR_STOP);

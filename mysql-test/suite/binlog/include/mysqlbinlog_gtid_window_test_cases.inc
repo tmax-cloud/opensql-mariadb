@@ -240,3 +240,7 @@ if (0 < `SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'te
 }
 DROP TABLE t1;
 DROP TABLE t2;
+
+# TODO: refine Case 9 to have only one zero seqno domain.
+# This will reveal a bug (that domain's gtids are accepted
+# instead of forcing the stop.
