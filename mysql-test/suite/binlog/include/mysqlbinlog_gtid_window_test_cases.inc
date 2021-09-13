@@ -90,7 +90,6 @@ SET @@session.server_id= 20;
 --eval SET @@session.gtid_domain_id= $reset_gtid_domain_id
 --eval SET @@session.server_id= $reset_server_id
 DROP TABLE t1;
-DROP TABLE t2;
 
 
 --echo #
@@ -103,12 +102,7 @@ if ($test2_t1_good_checksum != `CHECKSUM TABLE t1`)
 {
     die $data_inconsistent_err;
 }
-if ($t2_final_checksum != `CHECKSUM TABLE t2`)
-{
-    die $data_inconsistent_err;
-}
 DROP TABLE t1;
-DROP TABLE t2;
 
 
 --echo #
@@ -118,10 +112,6 @@ DROP TABLE t2;
 --exec $MYSQL_BINLOG $BINLOG_FILE_PARAM --start-position=1-2-0 --stop-position=1-3-4 | $MYSQL
 
 if ($test3_t2_good_checksum != `CHECKSUM TABLE t2`)
-{
-    die $data_inconsistent_err;
-}
-if ($t1_final_checksum != `CHECKSUM TABLE t1`)
 {
     die $data_inconsistent_err;
 }
@@ -201,12 +191,7 @@ if ($test2_t1_good_checksum != `CHECKSUM TABLE t1`)
 {
     die $data_inconsistent_err;
 }
-if ($t2_final_checksum != `CHECKSUM TABLE t2`)
-{
-    die $data_inconsistent_err;
-}
 DROP TABLE t1;
-DROP TABLE t2;
 
 
 --echo #
@@ -238,9 +223,46 @@ if (0 < `SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'te
 {
     die "t2 should not exist as binlog replay should exclude domain 1 from results";
 }
+
+--echo #
+--echo #   Test Case 10:
+--echo #   Output stops for all domain ids when all --stop-position GTID values
+--echo # have been hit.
+--echo # MYSQL_BINLOG BINLOG_FILE_PARAM --stop-position=0-1-2 | MYSQL
+--exec $MYSQL_BINLOG $BINLOG_FILE_PARAM --stop-position=0-1-2 | $MYSQL
+if ($test2_t1_good_checksum != `CHECKSUM TABLE t1`)
+{
+    die $data_inconsistent_err;
+}
+if (0 < `SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'test' AND table_name = 't2'`)
+{
+    die "t2 should not exist as binlog replay should exclude domain 1 from results";
+}
+DROP TABLE t1;
+
+--echo #
+--echo #   Test Case 11:
+--echo #   All GTID events from other domains are printed until the
+--echo # --stop-position values are hit
+--echo # MYSQL_BINLOG BINLOG_FILE_PARAM --stop-position=1-3-4 | MYSQL
+--exec $MYSQL_BINLOG $BINLOG_FILE_PARAM --stop-position=1-3-4 | $MYSQL
+if ($t1_final_checksum != `CHECKSUM TABLE t1`)
+{
+    die $data_inconsistent_err;
+}
+if ($test3_t2_good_checksum != `CHECKSUM TABLE t2`)
+{
+    die $data_inconsistent_err;
+}
 DROP TABLE t1;
 DROP TABLE t2;
 
-# TODO: refine Case 9 to have only one zero seqno domain.
-# This will reveal a bug (that domain's gtids are accepted
-# instead of forcing the stop.
+--echo #   Test Case 12:
+--echo #   Scalar and GTID values can be used together for stop or start
+--echo # position
+--echo # MYSQL_BINLOG BINLOG_FILE_PARAM --start-position=4 --stop-position=0-1-1 | MYSQL
+--exec $MYSQL_BINLOG $BINLOG_FILE_PARAM --start-position=4 --stop-position=0-1-1 | $MYSQL
+DROP TABLE t1;
+--echo # MYSQL_BINLOG BINLOG_FILE_PARAM --start-position=0-1-0 --stop-position=512 | MYSQL
+--exec $MYSQL_BINLOG $BINLOG_FILE_PARAM --start-position=0-1-0 --stop-position=512 | $MYSQL
+DROP TABLE t1;

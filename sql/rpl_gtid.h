@@ -414,6 +414,14 @@ public:
     implementation
   */
   virtual uint32 get_filter_type() = 0;
+
+  /*
+    For filters that can maintain their own state, this tests if the filter
+    implementation has completed.
+
+    Returns TRUE when completed, and FALSE when the filter has not finished.
+  */
+  virtual my_bool has_finished() = 0;
 };
 
 /*
@@ -430,6 +438,7 @@ public:
   ~Accept_all_gtid_filter() {}
   my_bool exclude(rpl_gtid *gtid) { return FALSE; }
   uint32 get_filter_type() { return ACCEPT_ALL_GTID_FILTER_TYPE; }
+  my_bool has_finished() { return FALSE; }
 };
 
 /*
@@ -457,6 +466,7 @@ public:
   */
   my_bool exclude(rpl_gtid *gtid) { return m_filter->exclude(gtid); }
   uint32 get_filter_type() { return m_filter->get_filter_type(); }
+  my_bool has_finished() { return m_filter->has_finished(); }
 
 protected:
   gtid_filter_identifier m_filter_id;
@@ -483,10 +493,10 @@ class Window_gtid_event_filter : public Gtid_event_filter
 {
 public:
   Window_gtid_event_filter();
-  Window_gtid_event_filter(rpl_gtid *start, rpl_gtid *stop);
   ~Window_gtid_event_filter() {}
 
   my_bool exclude(rpl_gtid*);
+  my_bool has_finished();
 
   /*
     Set the GTID that begins this window (exclusive)
@@ -503,6 +513,20 @@ public:
   int set_stop_gtid(rpl_gtid *stop);
 
   uint32 get_filter_type() { return WINDOW_GTID_FILTER_TYPE; }
+
+protected:
+
+  /*
+    When processing GTID streams, the order in which they are processed
+    must be sequential with no gaps between events.
+
+    Errors if the gtid is out of order.
+
+    Note that this only keeps track of GTID order within the window, i.e. if
+    there is a gap that exists before m_start or after m_stop, this will NOT
+    throw an error.
+  */
+  void assert_gtid_is_expected(rpl_gtid *gtid);
 
 private:
   /*
@@ -569,6 +593,7 @@ public:
   ~Id_delegating_gtid_event_filter();
 
   my_bool exclude(rpl_gtid *gtid);
+  my_bool has_finished();
   void set_default_filter(Gtid_event_filter *default_filter);
 
   uint32 get_filter_type() { return DELEGATING_GTID_FILTER_TYPE; }
@@ -578,6 +603,8 @@ public:
 
 protected:
 
+  uint32 m_num_explicit_filters;
+  uint32 m_num_completed_filters;
   uint32 m_filter_id_mask;
   Gtid_event_filter *m_default_filter;
 

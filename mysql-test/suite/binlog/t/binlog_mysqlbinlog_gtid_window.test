@@ -8,10 +8,7 @@
 #   2) GTIDs can be used to filter results from remote servers
 #   3) For a given GTID range, its start-position is exclusive and its
 #      stop-position is inclusive. This allows users to receive events strictly
-#      after those that they already have, and is useful in cases such as: 1)
-#      events were received out of order and should be re-sent, or 2)
-#      specifying the  gtid state of a slave to get events newer than their
-#      current state.
+#      after what they already have.
 #   4) After the events have been written, the session server id and domain id
 #      are reset to their former values
 #
@@ -31,6 +28,12 @@
 #   Test Case 7) Only stop position specified
 #   Test Case 8) Seq_no=0 in --start-position includes all events for a domain
 #   Test Case 9) Seq_no=0 in --stop-position excludes all events for a domain
+#   Test Case 10) Output stops for all domain ids when all --stop-position GTID
+#                 values have been hit.
+#   Test Case 11) All GTID events from other domains are printed until
+#                 the --stop-position values are hit
+#   Test Case 12) Scalar and GTID values can be used together for stop or start
+#                 position
 #
 # To validate for data consistency, each test case compares a checksum of
 # correct data against a variant created after replaying the binlog using
@@ -40,6 +43,18 @@
 # Additionally, this test validates the following error scenarios:
 #   Error Case 1) User provides invalid positions
 #   Error Case 2) User provides GTID ranges with repeated domain ids
+#   Error Case 3) --stop-position is not strictly greater than --start-position
+#   Error Case 4) A gap in sequence number at the beginning of a window results
+#                 in error
+#   Error Case 5) A gap in sequence number at the end of a window results in
+#                 error
+#   Error Case 6) A gap in sequence number within a window results in error
+#   Error Case 7) When invoked with just --start-position, a gap in sequence
+#                 number after the provided GTID results in error
+#   Error Case 8) When invoked with just --stop-position, a gap in sequence
+#                 number before the provided GTID results in error
+#   Error Case 9) One domain has a sequence number gap but another does not
+#                 results in error
 #
 #
 # References:
@@ -86,39 +101,154 @@ RESET MASTER;
 --echo #
 --echo #   Error Case 1:
 --echo #   User provides invalid positions
---echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=z --base64-output=NEVER
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=z
 --error 1
---exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=z --base64-output=NEVER
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=z
 
---echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=1- --base64-output=NEVER
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=1-
 --error 1
---exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=1- --base64-output=NEVER
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=1-
 
---echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=1-2 --base64-output=NEVER
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=1-2
 --error 1
---exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=1-2 --base64-output=NEVER
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=1-2
 
---echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=1-2- --base64-output=NEVER
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=1-2-
 --error 1
---exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=1-2- --base64-output=NEVER
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=1-2-
 
---echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=-1 --base64-output=NEVER
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=-1
 --error 1
---exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=-1 --base64-output=NEVER
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=-1
 
 --echo #
 --echo #   Error Case 2:
 --echo #   User provides GTID ranges with repeated domain ids
---echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1,0-1-8 --stop-position=0-1-4,0-1-12 --base64-output=NEVER
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1,0-1-8 --stop-position=0-1-4,0-1-12
 --error 1
---exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1,0-1-8 --stop-position=0-1-4,0-1-12 --base64-output=NEVER
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1,0-1-8 --stop-position=0-1-4,0-1-12
+
+--echo #
+--echo #   Error Case 3:
+--echo #   --stop-position is not strictly greater than --start-position
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-2 --stop-position=0-1-1
+--error 1
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-2 --stop-position=0-1-1
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1 --stop-position=0-1-1
+--error 1
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1 --stop-position=0-1-1
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-2,1-2-1 --stop-position=0-1-1,1-2-2
+--error 1
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-2,1-2-1 --stop-position=0-1-1,1-2-2
+
+--echo #
+--echo #   Error Case 4:
+--echo #   A gap in sequence number at end of window results in error
+RESET MASTER;
+SET @@session.gtid_domain_id= 0;
+SET @@session.server_id= 1;
+CREATE TABLE t1 (a int);
+INSERT INTO t1 values (1);
+INSERT INTO t1 values (2);
+SET @@session.gtid_seq_no= 5;
+INSERT INTO t1 values (3);
+FLUSH LOGS;
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 > MYSQLTEST_VARDIR/tmp/out.binlog
+--error 1
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 > $MYSQLTEST_VARDIR/tmp/out.binlog
+DROP TABLE t1;
+
+--echo #
+--echo #   Error Case 5:
+--echo #   A gap in sequence number at beginning of window results in error
+RESET MASTER;
+SET @@session.gtid_domain_id= 0;
+SET @@session.server_id= 1;
+CREATE TABLE t1 (a int);
+SET @@session.gtid_seq_no= 3;
+INSERT INTO t1 values (1);
+FLUSH LOGS;
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1 > MYSQLTEST_VARDIR/tmp/out.binlog
+--error 1
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1 > $MYSQLTEST_VARDIR/tmp/out.binlog
+DROP TABLE t1;
+
+--echo #
+--echo #   Error Case 6:
+--echo #   A gap in sequence number within a window results in error
+RESET MASTER;
+SET @@session.gtid_domain_id= 0;
+SET @@session.server_id= 1;
+CREATE TABLE t1 (a int);
+INSERT INTO t1 values (1);
+SET @@session.gtid_seq_no= 4;
+INSERT INTO t1 values (2);
+FLUSH LOGS;
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 > MYSQLTEST_VARDIR/tmp/out.binlog
+--error 1
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 > $MYSQLTEST_VARDIR/tmp/out.binlog
+DROP TABLE t1;
+
+--echo #
+--echo #   Error Case 7:
+--echo #   When invoked with just --start-position, a gap in sequence number
+--echo # after the provided GTID results in error
+RESET MASTER;
+SET @@session.gtid_domain_id= 0;
+SET @@session.server_id= 1;
+CREATE TABLE t1 (a int);
+INSERT INTO t1 values (1);
+SET @@session.gtid_seq_no= 4;
+INSERT INTO t1 values (2);
+FLUSH LOGS;
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 > MYSQLTEST_VARDIR/tmp/out.binlog
+--error 1
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 > $MYSQLTEST_VARDIR/tmp/out.binlog
+DROP TABLE t1;
+
+--echo #
+--echo #   Error Case 8:
+--echo #   When invoked with just --stop-position, a gap in sequence number
+--echo # before the provided GTID results in error
+RESET MASTER;
+SET @@session.gtid_domain_id= 0;
+SET @@session.server_id= 1;
+CREATE TABLE t1 (a int);
+INSERT INTO t1 values (1);
+SET @@session.gtid_seq_no= 4;
+INSERT INTO t1 values (2);
+FLUSH LOGS;
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --stop-position=0-1-4 > MYSQLTEST_VARDIR/tmp/out.binlog
+--error 1
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --stop-position=0-1-4 > $MYSQLTEST_VARDIR/tmp/out.binlog
+DROP TABLE t1;
+
+--echo #
+--echo #   Error Case 9:
+--echo #   One domain has a sequence number gap but another does not results in
+--echo # error
+RESET MASTER;
+SET @@session.gtid_domain_id= 1;
+SET @@session.server_id= 2;
+CREATE TABLE t2 (a int);
+INSERT INTO t2 values (1);
+INSERT INTO t2 values (2);
+SET @@session.gtid_domain_id= 0;
+SET @@session.server_id= 1;
+CREATE TABLE t1 (a int);
+INSERT INTO t1 values (1);
+SET @@session.gtid_seq_no= 4;
+INSERT INTO t1 values (2);
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0,1-2-0 --stop-position=0-1-4,1-2-3 > MYSQLTEST_VARDIR/tmp/out.binlog
+--error 1
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0,1-2-0 --stop-position=0-1-4,1-2-3 > $MYSQLTEST_VARDIR/tmp/out.binlog
+DROP TABLE t1;
+DROP TABLE t2;
 
 
 --echo ##############################
 --echo #      Cleanup
 --echo ##############################
-DROP TABLE IF EXISTS t1;
-DROP TABLE IF EXISTS t2;
 --eval SET @@global.gtid_domain_id= $orig_gtid_domain_id
 --eval SET @@global.server_id= $orig_server_id
 

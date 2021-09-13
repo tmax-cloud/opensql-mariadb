@@ -163,8 +163,6 @@ struct binlog_send_info {
   bool should_stop;
   size_t dirlen;
 
-  Gtid_event_filter *gtid_event_filter;
-
   binlog_send_info(THD *thd_arg, String *packet_arg, ushort flags_arg,
                    char *lfn)
     : thd(thd_arg), net(&thd_arg->net), packet(packet_arg),
@@ -187,8 +185,6 @@ struct binlog_send_info {
     error_text[0] = 0;
     bzero(&error_gtid, sizeof(error_gtid));
     until_binlog_state.init();
-
-    gtid_event_filter= NULL;
   }
 };
 
@@ -1755,7 +1751,6 @@ send_event_to_slave(binlog_send_info *info, Log_event_type event_type,
     }
   }
 
-
   /* Skip GTID event groups until we reach slave position within a domain_id. */
   if (event_type == GTID_EVENT && info->using_gtid_state)
   {
@@ -1763,7 +1758,7 @@ send_event_to_slave(binlog_send_info *info, Log_event_type event_type,
     slave_connection_state::entry *gtid_entry;
     rpl_gtid *gtid;
 
-    if (gtid_state->count() > 0 || until_gtid_state || info->gtid_event_filter)
+    if (gtid_state->count() > 0 || until_gtid_state)
     {
       rpl_gtid event_gtid;
 
@@ -1903,17 +1898,6 @@ send_event_to_slave(binlog_send_info *info, Log_event_type event_type,
                                 GTID_SKIP_STANDALONE : GTID_SKIP_TRANSACTION);
           }
         }
-      }
-
-      /*
-        Should this result be excluded from the output?
-      */
-      if (info->gtid_event_filter &&
-          info->gtid_event_filter->exclude(&event_gtid))
-      {
-        info->gtid_skip_group=
-            (flags2 & Gtid_log_event::FL_STANDALONE ? GTID_SKIP_STANDALONE
-                                                    : GTID_SKIP_TRANSACTION);
       }
     }
   }
@@ -2126,9 +2110,7 @@ err:
 static int init_binlog_sender(binlog_send_info *info,
                               LOG_INFO *linfo,
                               const char *log_ident,
-                              my_off_t *pos,
-                              rpl_gtid *start_gtids,
-                              size_t n_start_gtids)
+                              my_off_t *pos)
 {
   THD *thd= info->thd;
   int error;
@@ -2148,8 +2130,7 @@ static int init_binlog_sender(binlog_send_info *info,
 
   info->current_checksum_alg= get_binlog_checksum_value_at_connect(thd);
   info->mariadb_slave_capability= get_mariadb_slave_capability(thd);
-  info->using_gtid_state= get_slave_connect_state(thd, &connect_gtid_state) ||
-                          start_gtids != NULL;
+  info->using_gtid_state= get_slave_connect_state(thd, &connect_gtid_state);
   DBUG_EXECUTE_IF("simulate_non_gtid_aware_master",
                   info->using_gtid_state= false;);
 
@@ -2264,21 +2245,6 @@ static int init_binlog_sender(binlog_send_info *info,
       (rli->group_master_log_pos)
     */
     info->clear_initial_log_pos= true;
-  }
-
-  if (start_gtids != NULL)
-  {
-    Domain_gtid_event_filter *filter= new Domain_gtid_event_filter();
-    my_off_t i;
-    for(i = 0; i < n_start_gtids; i++)
-    {
-      if (filter->add_start_gtid(&start_gtids[i]))
-      {
-        info->errmsg= "Domain id is invalid for GTID start position";
-        info->error= ER_INCORRECT_GTID_STATE;
-      }
-    }
-    info->gtid_event_filter= filter;
   }
 
   return 0;
@@ -2873,9 +2839,7 @@ static int send_one_binlog_file(binlog_send_info *info,
   return 1;
 }
 
-void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
-                       ushort flags, rpl_gtid *start_gtids,
-                       uint32 n_start_gtids)
+void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos, ushort flags)
 {
   LOG_INFO linfo;
 
@@ -2895,8 +2859,7 @@ void mysql_binlog_send(THD* thd, char* log_ident, my_off_t pos,
 
   bzero((char*) &log,sizeof(log));
 
-  if (init_binlog_sender(info, &linfo, log_ident, &pos, start_gtids,
-                         n_start_gtids))
+  if (init_binlog_sender(info, &linfo, log_ident, &pos))
     goto err;
 
   has_transmit_started= true;
@@ -3058,8 +3021,6 @@ err:
   thd->reset_current_linfo();
   thd->variables.max_allowed_packet= old_max_allowed_packet;
   delete info->fdev;
-  delete info->gtid_event_filter;
-  my_free(start_gtids);
 
   if (likely(info->error == 0))
   {

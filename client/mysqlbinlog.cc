@@ -151,7 +151,6 @@ static ulonglong start_position= BIN_LOG_HEADER_SIZE,
 
 static Domain_gtid_event_filter *domain_gtid_filter= NULL;
 static rpl_gtid *start_gtids, *stop_gtids;
-static my_bool is_event_group_active= FALSE;
 static uint32 n_start_gtid_ranges= 0;
 static uint32 n_stop_gtid_ranges= 0;
 
@@ -1034,7 +1033,7 @@ Exit_status process_event(PRINT_EVENT_INFO *print_event_info, Log_event *ev,
     If the binlog output should be filtered using GTIDs, test the new event
     group to see if its events should be written or ignored.
   */
-  if (ev_type == GTID_EVENT && is_gtid_filtering_enabled())
+  if (ev_type == GTID_EVENT && domain_gtid_filter)
   {
     Gtid_log_event *gle= (Gtid_log_event*) ev;
     rpl_gtid gtid;
@@ -1042,9 +1041,7 @@ Exit_status process_event(PRINT_EVENT_INFO *print_event_info, Log_event *ev,
     gtid.server_id= gle->server_id;
     gtid.seq_no= gle->seq_no;
     if (!domain_gtid_filter->exclude(&gtid))
-      is_event_group_active= TRUE;
-    else
-      is_event_group_active= FALSE;
+      ev->activate_current_event_group();
   }
 
   /*
@@ -1053,7 +1050,7 @@ Exit_status process_event(PRINT_EVENT_INFO *print_event_info, Log_event *ev,
   */
   if (((rec_count >= offset) &&
        (ev->when >= start_datetime) &&
-       (!is_gtid_filtering_enabled() || is_event_group_active)) ||
+       ev->is_event_group_active()) ||
       (ev_type == FORMAT_DESCRIPTION_EVENT))
   {
     if (ev_type != FORMAT_DESCRIPTION_EVENT)
@@ -1482,6 +1479,14 @@ Exit_status process_event(PRINT_EVENT_INFO *print_event_info, Log_event *ev,
     }
   }
 
+  /*
+    If all filters have finished, e.g. all --stop-position GTIDs have been hit,
+    and the last event group has finished printing, then we are finished
+  */
+  if (domain_gtid_filter && domain_gtid_filter->has_finished() &&
+      !Log_event::is_event_group_active())
+    retval= OK_STOP;
+
   goto end;
 
 err:
@@ -1528,17 +1533,6 @@ end:
         fflush(result_file);
         my_free(tmp_str.str);
       }
-    }
-
-    /*
-      Xid_log_events or commit Query_log_events mark the end of a GTID event
-      group.
-    */
-    if ((ev_type == XID_EVENT ||
-         (ev_type == QUERY_EVENT && ((Query_log_event *) ev)->is_commit())) &&
-        is_event_group_active)
-    {
-      is_event_group_active= FALSE;
     }
 
     if (destroy_evt) /* destroy it later if not set (ignored table map) */
@@ -1703,9 +1697,10 @@ static struct my_option my_options[] =
    "integer or a GTID list. When using a positive integer, the value only "
    "applies to the first binlog passed on the command line. In GTID mode, "
    "multiple GTIDs can be passed as a comma separated list, where each must "
-   "have a unique domain id. Each GTID is exclusive; only events after a "
-   "given sequence number will be printed to allow users to receive events "
-   "after their current state, e.g. on a slave.",
+   "have a unique domain id. The list represents the gtid binlog state that "
+   "the client (another \"replica\" server) is aware of. Therefore, each GTID "
+   "is exclusive; only events after a given sequence number will be printed to "
+   "allow users to receive events after their current state.",
    &start_pos_str, &start_pos_str, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0,
    0, 0, 0},
   {"stop-datetime", OPT_STOP_DATETIME,
@@ -2253,6 +2248,11 @@ static int parse_args(int *argc, char*** argv)
             "adjusted to 4294967295 (limitation of the client-server protocol)",
             start_position);
     start_position= UINT_MAX32;
+  }
+
+  if (domain_gtid_filter)
+  {
+    Log_event::enable_event_group_filtering();
   }
   return 0;
 }

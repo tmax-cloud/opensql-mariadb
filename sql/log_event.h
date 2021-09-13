@@ -1299,6 +1299,51 @@ public:
                     bool is_more);
   bool print_base64(IO_CACHE* file, PRINT_EVENT_INFO* print_event_info,
                     bool do_print_encoded);
+
+  /*
+    Used to include the events within a GTID start/stop boundary
+  */
+  static my_bool m_is_event_group_active;
+
+  /*
+    Tracks whether or not output events must be explicitly activated in order
+    to be printed
+  */
+  static my_bool m_is_event_group_filtering_enabled;
+
+  /*
+    Notify that all events part of the current group should be printed
+  */
+  static void activate_current_event_group()
+  {
+    m_is_event_group_active= TRUE;
+  }
+  static void deactivate_current_event_group()
+  {
+    m_is_event_group_active= FALSE;
+  }
+
+  /*
+    Used for displaying events part of an event group.
+    Returns TRUE when both event group filtering is enabled and the current
+            event group should be displayed, OR if event group filtering is
+            disabled. More specifically, if filtering is disabled, all events
+            should be shown.
+    Returns FALSE when event group filtering is enabled and the current event
+            group is filtered out.
+  */
+  static my_bool is_event_group_active()
+  {
+    return m_is_event_group_filtering_enabled ? m_is_event_group_active : TRUE;
+  }
+
+  /*
+    Notify that events must be explicitly activated in order to be printed
+  */
+  static void enable_event_group_filtering()
+  {
+    m_is_event_group_filtering_enabled= TRUE;
+  }
 #endif /* MYSQL_SERVER */
 
   /* The following code used for Flashback */
