@@ -326,6 +326,7 @@ static inline bool is_enum_or_set_type(uint type) {
 
 my_bool Log_event::m_is_event_group_active= FALSE;
 my_bool Log_event::m_is_event_group_filtering_enabled= FALSE;
+my_bool Log_event::last_gtid_standalone= FALSE;
 
 /*
   Log_event::print_header()
@@ -2017,7 +2018,7 @@ bool Query_log_event::print(FILE* file, PRINT_EVENT_INFO* print_event_info)
     This marks the end of an event group. All events prior to this have been
     printed, need to reset the tracking for future event groups
   */
-  if (is_commit())
+  if (is_commit() || is_rollback() || last_gtid_standalone)
     deactivate_current_event_group();
 #endif
 

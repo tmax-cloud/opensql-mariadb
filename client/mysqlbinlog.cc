@@ -1042,6 +1042,8 @@ Exit_status process_event(PRINT_EVENT_INFO *print_event_info, Log_event *ev,
     gtid.seq_no= gle->seq_no;
     if (!domain_gtid_filter->exclude(&gtid))
       ev->activate_current_event_group();
+    ev->last_gtid_standalone=
+      (gle->flags2 & Gtid_log_event::FL_STANDALONE) ? true : false;
   }
 
   /*
