@@ -1030,6 +1030,55 @@ Exit_status process_event(PRINT_EVENT_INFO *print_event_info, Log_event *ev,
   ev->need_flashback_review= opt_flashback_review;
 #endif
 
+  /* Run time estimation of the output window configuration. */
+  if (ev_type == GTID_LIST_EVENT && is_gtid_filtering_enabled())
+  {
+    Gtid_list_log_event *glev= (Gtid_list_log_event *)ev;
+    for (uint i= 0; i < n_start_gtid_ranges; i++)
+    {
+      for (uint k= 0; k < glev->count; k++)
+      {
+        if (start_gtids[i].domain_id == glev->list[k].domain_id)
+        {
+          if (start_gtids[i].seq_no < glev->list[k].seq_no)
+            warning("A --start-position gtid %u-%u-%llu is deep inside of "
+                    "past binlog files; some of event groups of the domain %u "
+                    "may be missed from the expected output; the domain's gtid "
+                    "state of the current binlog file is %u-%u-%llu",
+                    start_gtids[i].domain_id,
+                    start_gtids[i].server_id,
+                    start_gtids[i].seq_no,
+                    glev->list[k].domain_id,
+                    glev->list[k].domain_id,
+                    glev->list[k].server_id,
+                    glev->list[k].seq_no);
+          break;
+        }
+      }
+    }
+    for (uint i= 0; i < n_stop_gtid_ranges; i++)
+    {
+      for (uint k= 0; k < glev->count; k++)
+      {
+        if (stop_gtids[i].domain_id == glev->list[k].domain_id)
+        {
+          if (stop_gtids[i].seq_no <= glev->list[k].seq_no)
+            warning("A --stop-position gtid %u-%u-%llu is deep inside of "
+                    "past binlog files so no output may be provided for "
+                    "the domain %u; the domain's gtid "
+                    "state of the current binlog file is %u-%u-%llu",
+                    stop_gtids[i].domain_id,
+                    stop_gtids[i].server_id,
+                    stop_gtids[i].seq_no,
+                    glev->list[k].domain_id,
+                    glev->list[k].domain_id,
+                    glev->list[k].server_id,
+                    glev->list[k].seq_no);
+          break;
+        }
+      }
+    }
+  }
   /*
     If the binlog output should be filtered using GTIDs, test the new event
     group to see if its events should be written or ignored.
