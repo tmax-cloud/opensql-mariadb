@@ -28,6 +28,7 @@ extern const LEX_CSTRING rpl_gtid_slave_state_table_name;
 class String;
 
 #define GTID_MAX_STR_LENGTH (10+1+10+1+20)
+#define PARAM_GTID(G) G.domain_id, G.server_id, G.seq_no
 
 struct rpl_gtid
 {
@@ -382,6 +383,8 @@ extern rpl_gtid *gtid_parse_string_to_list(const char *p, size_t len,
                                            uint32 *out_len);
 extern rpl_gtid *gtid_unpack_string_to_list(const char *p, size_t len,
                                            uint32 *out_len);
+extern void set_rpl_gtid(rpl_gtid *out, uint32 domain_id, uint32 server_id,
+                         uint64 seq_no);
 
 /*
   Interface to support different methods of filtering log events by GTID
@@ -449,39 +452,6 @@ public:
 };
 
 /*
-  A sub-class of Gtid_event_filter which allows for quick identification
-  of potentially applicable filters for arbitrary GTIDs.
-*/
-typedef uint32 gtid_filter_identifier;
-class Identifiable_gtid_event_filter : public Gtid_event_filter
-{
-
-public:
-  Identifiable_gtid_event_filter(gtid_filter_identifier filter_id,
-                                 Gtid_event_filter *filter)
-      : m_filter_id(filter_id), m_filter(filter){};
-
-  ~Identifiable_gtid_event_filter() {
-    delete m_filter;
-  };
-
-  Gtid_event_filter *get_identified_filter() { return m_filter; }
-  gtid_filter_identifier get_filter_identifier() { return m_filter_id; }
-
-  /*
-    Inherited functionality uses composition to call the pass-through filter
-  */
-  my_bool exclude(rpl_gtid *gtid) { return m_filter->exclude(gtid); }
-  uint32 get_filter_type() { return m_filter->get_filter_type(); }
-  my_bool has_finished() { return m_filter->has_finished(); }
-  void write_warnings(FILE *out) { return m_filter->write_warnings(out); }
-
-protected:
-  gtid_filter_identifier m_filter_id;
-  Gtid_event_filter *m_filter;
-};
-
-/*
   A filter implementation that passes through events between two GTIDs, m_start
   (exclusive) and m_stop (inclusive).
 
@@ -500,7 +470,7 @@ protected:
 class Window_gtid_event_filter : public Gtid_event_filter
 {
 public:
-  Window_gtid_event_filter();
+  Window_gtid_event_filter(my_bool *is_gtid_strict_mode);
   ~Window_gtid_event_filter() {}
 
   my_bool exclude(rpl_gtid*);
@@ -522,6 +492,27 @@ public:
   int set_stop_gtid(rpl_gtid *stop);
 
   uint32 get_filter_type() { return WINDOW_GTID_FILTER_TYPE; }
+
+
+  /*
+    Getter/setter methods
+  */
+  my_bool has_start() { return m_has_start; }
+  my_bool has_stop() { return m_has_stop; }
+  rpl_gtid get_start_gtid() { return m_start; }
+  rpl_gtid get_stop_gtid() { return m_stop; }
+
+  void clear_start_pos()
+  {
+    m_has_start= FALSE;
+    set_rpl_gtid(&m_start, 0, 0, 0);
+  }
+
+  void clear_stop_pos()
+  {
+    m_has_stop= FALSE;
+    set_rpl_gtid(&m_stop, 0, 0, 0);
+  }
 
 protected:
 
@@ -579,6 +570,13 @@ private:
                    filtering
   */
   uint32 m_warning_flags;
+
+  /*
+    is_gtid_strict_mode: presents additional warnings in strict mode. This
+                         points to some controller boolean which determines
+                         whether or not gtid_strict_mode is enabled or not.
+  */
+  my_bool *m_is_gtid_strict_mode;
 };
 
 /*
@@ -586,9 +584,11 @@ private:
   if two filters have identifiers that lead to the same hash, they will be
   put into a linked list.
 */
+typedef uint32 gtid_filter_identifier;
 typedef struct _gtid_filter_element
 {
-  Identifiable_gtid_event_filter *filter;
+  Gtid_event_filter *filter;
+  gtid_filter_identifier identifier; /* Used for HASH lookup */
   struct _gtid_filter_element *next;
 } gtid_filter_element;
 
@@ -622,19 +622,10 @@ protected:
 
   uint32 m_num_explicit_filters;
   uint32 m_num_completed_filters;
-  uint32 m_filter_id_mask;
   Gtid_event_filter *m_default_filter;
 
-  /*
-    To reduce time to find a gtid window, they are indexed by domain_id. More
-    specifically, domain_ids are arranged into m_filter_id_mask+1 buckets, and
-    each bucket is a linked list of gtid_filter_elements that share the same
-    index. The index itself is found by a bitwise and, i.e.
-        some_rpl_gtid.domain_id & m_filter_id_mask
-  */
-  gtid_filter_element **m_filters_by_id;
+  HASH m_filters_by_id_hash;
 
-  gtid_filter_element *try_find_filter_element_for_id(gtid_filter_identifier);
   gtid_filter_element *find_or_create_filter_element_for_id(gtid_filter_identifier);
 };
 
@@ -643,14 +634,33 @@ protected:
   domain id of a GTID.
 
   Additional helper functions include:
-    add_start_gtid(GTID) : adds a start GTID position to this filter, to be
-                           identified by its domain id
-    add_stop_gtid(GTID) : adds a stop GTID position to this filter, to be
-                           identified by its domain id
+    add_start_gtid(GTID)   : adds a start GTID position to this filter, to be
+                             identified by its domain id
+    add_stop_gtid(GTID)    : adds a stop GTID position to this filter, to be
+                             identified by its domain id
+    clear_start_gtids()    : removes existing GTID start positions
+    clear_stop_gtids()     : removes existing GTID stop positions
+    get_start_gtids()      : gets all added GTID start positions
+    get_stop_gtids()       : gets all added GTID stop positions
+    get_num_start_gtids()  : gets the count of added GTID start positions
+    get_num_stop_gtids()   : gets the count of added GTID stop positions
 */
 class Domain_gtid_event_filter : public Id_delegating_gtid_event_filter
 {
 public:
+  Domain_gtid_event_filter()
+      : m_is_gtid_strict_mode(0)
+  {
+    my_init_dynamic_array(PSI_INSTRUMENT_ME, &m_start_filters,
+                          sizeof(gtid_filter_element), 8, 8, MYF(0));
+    my_init_dynamic_array(PSI_INSTRUMENT_ME, &m_stop_filters,
+                          sizeof(gtid_filter_element), 8, 8, MYF(0));
+  }
+  ~Domain_gtid_event_filter()
+  {
+    delete_dynamic(&m_start_filters);
+    delete_dynamic(&m_stop_filters);
+  }
 
   /*
     Returns the domain id of from the input GTID
@@ -674,7 +684,50 @@ public:
   */
   int add_stop_gtid(rpl_gtid *gtid);
 
+  /*
+    If start or stop position is respecified, we remove all existing values
+    and start over with the new specification.
+  */
+  void clear_start_gtids();
+  void clear_stop_gtids();
+
+  /*
+    Return list of all GTIDs used as start position.
+
+    Note that this list is allocated and it is up to the user to free it
+  */
+  rpl_gtid *get_start_gtids();
+
+  /*
+    Return list of all GTIDs used as stop position.
+
+    Note that this list is allocated and it is up to the user to free it
+  */
+  rpl_gtid *get_stop_gtids();
+
+  size_t get_num_start_gtids() { return m_start_filters.elements; }
+  size_t get_num_stop_gtids() { return m_stop_filters.elements; }
+
+  /*
+    Enable or disable gtid_strict_mode for GTID sequence number processing.
+  */
+  void set_gtid_strict_mode(my_bool gtid_strict_mode_arg)
+  {
+    m_is_gtid_strict_mode= gtid_strict_mode_arg;
+  }
+
 private:
+  DYNAMIC_ARRAY m_start_filters;
+  DYNAMIC_ARRAY m_stop_filters;
+
+  /*
+    This controls whether gtid_strict_mode is enabled or disabled for all
+    child filters, e.g. of type Window_gtid_event_filter. More specifically,
+    they point to this variable, so when it changes, the behavior of all
+    children using this value changes.
+  */
+  my_bool m_is_gtid_strict_mode;
+
   Window_gtid_event_filter *find_or_create_window_filter_for_id(gtid_filter_identifier);
 };
 

@@ -326,7 +326,6 @@ static inline bool is_enum_or_set_type(uint type) {
 
 my_bool Log_event::m_is_event_group_active= FALSE;
 my_bool Log_event::m_is_event_group_filtering_enabled= FALSE;
-my_bool Log_event::last_gtid_standalone= FALSE;
 
 /*
   Log_event::print_header()
@@ -2013,15 +2012,6 @@ bool Query_log_event::print(FILE* file, PRINT_EVENT_INFO* print_event_info)
 {
   Write_on_release_cache cache(&print_event_info->head_cache, file, 0, this);
 
-#ifndef MYSQL_SERVER
-  /*
-    This marks the end of an event group. All events prior to this have been
-    printed, need to reset the tracking for future event groups
-  */
-  if (is_commit() || is_rollback() || last_gtid_standalone)
-    deactivate_current_event_group();
-#endif
-
   /**
     reduce the size of io cache so that the write function is called
     for every call to my_b_write().
@@ -2395,14 +2385,6 @@ bool Xid_log_event::print(FILE* file, PRINT_EVENT_INFO* print_event_info)
 {
   Write_on_release_cache cache(&print_event_info->head_cache, file,
                                Write_on_release_cache::FLUSH_F, this);
-
-#ifndef MYSQL_SERVER
-  /*
-    This marks the end of an event group. All events prior to this have been
-    printed, need to reset the tracking for future event groups
-  */
-  deactivate_current_event_group();
-#endif
 
   if (!print_event_info->short_form)
   {
@@ -3940,14 +3922,6 @@ bool XA_prepare_log_event::print(FILE* file, PRINT_EVENT_INFO* print_event_info)
   Write_on_release_cache cache(&print_event_info->head_cache, file,
                                Write_on_release_cache::FLUSH_F, this);
   m_xid.serialize();
-
-#ifndef MYSQL_SERVER
-  /*
-    All events prior to this have been printed, need to reset the tracking for
-    future event groups
-  */
-  deactivate_current_event_group();
-#endif
 
   if (!print_event_info->short_form)
   {

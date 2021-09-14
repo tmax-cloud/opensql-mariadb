@@ -120,6 +120,15 @@ CREATE TABLE t1 (a int);
 # MYSQL_BINLOG BINLOG_FILE_PARAM --start-position=0-1-1 --stop-position=0-1-2 | MYSQL
 NOT FOUND /WARNING/ in mysqld.1.err
 DROP TABLE t1;
+#   Test Case 14:
+#   Start position is specified twice on the command line
+CREATE TABLE t1 (a int);
+# MYSQL_BINLOG BINLOG_FILE_PARAM --start-position=0-1-0 --start-position=0-1-1 --stop-position=0-1-2 | MYSQL
+DROP TABLE t1;
+#   Test Case 15:
+#   Stop position is specified twice on the command line
+# MYSQL_BINLOG BINLOG_FILE_PARAM --start-position=0-1-0 --stop-position=0-1-1 --stop-position=0-1-2 | MYSQL
+DROP TABLE t1;
 ######################################
 #      Test Group 2
 #      Run test cases on remote host
@@ -232,6 +241,15 @@ CREATE TABLE t1 (a int);
 # MYSQL_BINLOG BINLOG_FILE_PARAM --start-position=0-1-1 --stop-position=0-1-2 | MYSQL
 NOT FOUND /WARNING/ in mysqld.1.err
 DROP TABLE t1;
+#   Test Case 14:
+#   Start position is specified twice on the command line
+CREATE TABLE t1 (a int);
+# MYSQL_BINLOG BINLOG_FILE_PARAM --start-position=0-1-0 --start-position=0-1-1 --stop-position=0-1-2 | MYSQL
+DROP TABLE t1;
+#   Test Case 15:
+#   Stop position is specified twice on the command line
+# MYSQL_BINLOG BINLOG_FILE_PARAM --start-position=0-1-0 --stop-position=0-1-1 --stop-position=0-1-2 | MYSQL
+DROP TABLE t1;
 ##############################
 #      Error Cases
 ##############################
@@ -253,9 +271,10 @@ DROP TABLE t1;
 # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-2 --stop-position=0-1-1
 # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1 --stop-position=0-1-1
 # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-2,1-2-1 --stop-position=0-1-1,1-2-2
-##############################
-#      Warning Cases
-##############################
+####################################################
+#      Warning Case Group 1
+#      Run test cases with strict-gtid-mode
+####################################################
 #
 #   Warning Case 1:
 #   A gap in sequence number at end of window results in a warning
@@ -268,7 +287,7 @@ INSERT INTO t1 values (2);
 SET @@session.gtid_seq_no= 5;
 INSERT INTO t1 values (3);
 FLUSH LOGS;
-# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 2> log_error_ > MYSQLTEST_VARDIR/tmp/out.binlog
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 --gtid-strict-mode 2> log_error_ > OUT_FILE
 FOUND 1 /WARNING/ in out.err
 DROP TABLE t1;
 #
@@ -281,7 +300,7 @@ CREATE TABLE t1 (a int);
 SET @@session.gtid_seq_no= 3;
 INSERT INTO t1 values (1);
 FLUSH LOGS;
-# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1 > /home/brandon/workspace/server/build/mysql-test/var/tmp/out.err > MYSQLTEST_VARDIR/tmp/out.binlog
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1 --gtid-strict-mode > log_error_ > OUT_FILE
 FOUND 1 /WARNING/ in out.err
 DROP TABLE t1;
 #
@@ -295,7 +314,7 @@ INSERT INTO t1 values (1);
 SET @@session.gtid_seq_no= 4;
 INSERT INTO t1 values (2);
 FLUSH LOGS;
-# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 2> log_error_ > MYSQLTEST_VARDIR/tmp/out.binlog
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 --gtid-strict-mode 2> log_error_ > OUT_FILE
 FOUND 1 /WARNING/ in out.err
 DROP TABLE t1;
 #
@@ -310,7 +329,7 @@ INSERT INTO t1 values (1);
 SET @@session.gtid_seq_no= 4;
 INSERT INTO t1 values (2);
 FLUSH LOGS;
-# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 2> log_error_ > MYSQLTEST_VARDIR/tmp/out.binlog
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --gtid-strict-mode 2> log_error_ > OUT_FILE
 FOUND 1 /WARNING/ in out.err
 DROP TABLE t1;
 #
@@ -325,7 +344,7 @@ INSERT INTO t1 values (1);
 SET @@session.gtid_seq_no= 4;
 INSERT INTO t1 values (2);
 FLUSH LOGS;
-# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --stop-position=0-1-4 2> log_error_ > MYSQLTEST_VARDIR/tmp/out.binlog
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --stop-position=0-1-4 --gtid-strict-mode 2> log_error_ > OUT_FILE
 FOUND 1 /WARNING/ in out.err
 DROP TABLE t1;
 #
@@ -345,8 +364,105 @@ INSERT INTO t1 values (1);
 SET @@session.gtid_seq_no= 4;
 INSERT INTO t1 values (2);
 FLUSH LOGS;
-# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0,1-2-0 --stop-position=0-1-4,1-2-3 2> log_error_ > MYSQLTEST_VARDIR/tmp/out.binlog
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0,1-2-0 --stop-position=0-1-4,1-2-3 --gtid-strict-mode 2> log_error_ > OUT_FILE
 FOUND 1 /WARNING/ in out.err
+DROP TABLE t1;
+DROP TABLE t2;
+####################################################
+#      Warning Case Group 2
+#      Run test cases with --skip-strict-gtid-mode
+####################################################
+#
+#   Warning Case 1:
+#   A gap in sequence number at end of window results in a warning
+RESET MASTER;
+SET @@session.gtid_domain_id= 0;
+SET @@session.server_id= 1;
+CREATE TABLE t1 (a int);
+INSERT INTO t1 values (1);
+INSERT INTO t1 values (2);
+SET @@session.gtid_seq_no= 5;
+INSERT INTO t1 values (3);
+FLUSH LOGS;
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 --skip-gtid-strict-mode 2> log_error_ > OUT_FILE
+NOT FOUND /WARNING/ in out.err
+DROP TABLE t1;
+#
+#   Warning Case 2:
+#   A gap in sequence number at beginning of window results in a warning
+RESET MASTER;
+SET @@session.gtid_domain_id= 0;
+SET @@session.server_id= 1;
+CREATE TABLE t1 (a int);
+SET @@session.gtid_seq_no= 3;
+INSERT INTO t1 values (1);
+FLUSH LOGS;
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1 --skip-gtid-strict-mode > log_error_ > OUT_FILE
+NOT FOUND /WARNING/ in out.err
+DROP TABLE t1;
+#
+#   Warning Case 3:
+#   A gap in sequence number within a window results in a warning
+RESET MASTER;
+SET @@session.gtid_domain_id= 0;
+SET @@session.server_id= 1;
+CREATE TABLE t1 (a int);
+INSERT INTO t1 values (1);
+SET @@session.gtid_seq_no= 4;
+INSERT INTO t1 values (2);
+FLUSH LOGS;
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 --skip-gtid-strict-mode 2> log_error_ > OUT_FILE
+NOT FOUND /WARNING/ in out.err
+DROP TABLE t1;
+#
+#   Warning Case 4:
+#   When invoked with just --start-position, a gap in sequence number
+# after the provided GTID results in a warning
+RESET MASTER;
+SET @@session.gtid_domain_id= 0;
+SET @@session.server_id= 1;
+CREATE TABLE t1 (a int);
+INSERT INTO t1 values (1);
+SET @@session.gtid_seq_no= 4;
+INSERT INTO t1 values (2);
+FLUSH LOGS;
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --skip-gtid-strict-mode 2> log_error_ > OUT_FILE
+NOT FOUND /WARNING/ in out.err
+DROP TABLE t1;
+#
+#   Warning Case 5:
+#   When invoked with just --stop-position, a gap in sequence number
+# before the provided GTID results in a warning
+RESET MASTER;
+SET @@session.gtid_domain_id= 0;
+SET @@session.server_id= 1;
+CREATE TABLE t1 (a int);
+INSERT INTO t1 values (1);
+SET @@session.gtid_seq_no= 4;
+INSERT INTO t1 values (2);
+FLUSH LOGS;
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --stop-position=0-1-4 --skip-gtid-strict-mode 2> log_error_ > OUT_FILE
+NOT FOUND /WARNING/ in out.err
+DROP TABLE t1;
+#
+#   Warning Case 6:
+#   One domain has a sequence number gap but another does not results in
+# a warning
+RESET MASTER;
+SET @@session.gtid_domain_id= 1;
+SET @@session.server_id= 2;
+CREATE TABLE t2 (a int);
+INSERT INTO t2 values (1);
+INSERT INTO t2 values (2);
+SET @@session.gtid_domain_id= 0;
+SET @@session.server_id= 1;
+CREATE TABLE t1 (a int);
+INSERT INTO t1 values (1);
+SET @@session.gtid_seq_no= 4;
+INSERT INTO t1 values (2);
+FLUSH LOGS;
+# MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0,1-2-0 --stop-position=0-1-4,1-2-3 --skip-gtid-strict-mode 2> log_error_ > OUT_FILE
+NOT FOUND /WARNING/ in out.err
 DROP TABLE t1;
 DROP TABLE t2;
 ##############################

@@ -1311,8 +1311,6 @@ public:
   */
   static my_bool m_is_event_group_filtering_enabled;
 
-  static my_bool last_gtid_standalone; // gtid type of last seen gtid
-
   /*
     Notify that all events part of the current group should be printed
   */
