@@ -422,6 +422,12 @@ public:
     Returns TRUE when completed, and FALSE when the filter has not finished.
   */
   virtual my_bool has_finished() = 0;
+
+  /*
+    If any non-fatal issues occurred during filtering, to not pollute the
+    output with warnings, we wait until after processing to write them.
+  */
+  virtual void write_warnings(FILE *out) = 0;
 };
 
 /*
@@ -439,6 +445,7 @@ public:
   my_bool exclude(rpl_gtid *gtid) { return FALSE; }
   uint32 get_filter_type() { return ACCEPT_ALL_GTID_FILTER_TYPE; }
   my_bool has_finished() { return FALSE; }
+  void write_warnings(FILE *out) {}
 };
 
 /*
@@ -467,6 +474,7 @@ public:
   my_bool exclude(rpl_gtid *gtid) { return m_filter->exclude(gtid); }
   uint32 get_filter_type() { return m_filter->get_filter_type(); }
   my_bool has_finished() { return m_filter->has_finished(); }
+  void write_warnings(FILE *out) { return m_filter->write_warnings(out); }
 
 protected:
   gtid_filter_identifier m_filter_id;
@@ -497,6 +505,7 @@ public:
 
   my_bool exclude(rpl_gtid*);
   my_bool has_finished();
+  void write_warnings(FILE *out);
 
   /*
     Set the GTID that begins this window (exclusive)
@@ -517,18 +526,19 @@ public:
 protected:
 
   /*
-    When processing GTID streams, the order in which they are processed
-    must be sequential with no gaps between events.
-
-    Errors if the gtid is out of order.
-
-    Note that this only keeps track of GTID order within the window, i.e. if
-    there is a gap that exists before m_start or after m_stop, this will NOT
-    throw an error.
+    When processing GTID streams, the order in which they are processed should
+    be sequential with no gaps between events. If a gap is found within a
+    window, warn the user.
   */
-  void assert_gtid_is_expected(rpl_gtid *gtid);
+  void verify_gtid_is_expected(rpl_gtid *gtid);
 
 private:
+
+  enum warning_flags
+  {
+    WARN_GTID_SEQUENCE_NUMBER_OUT_OF_ORDER= 0x1
+  };
+
   /*
     m_has_start : Indicates if a start to this window has been explicitly
                   provided. A window starts immediately if not provided.
@@ -563,6 +573,12 @@ private:
 
   /* last_gtid_seen: saves the last  */
   rpl_gtid last_gtid_seen;
+
+  /*
+    warning_flags: holds flags for any non-fatal issues encountered during
+                   filtering
+  */
+  uint32 m_warning_flags;
 };
 
 /*
@@ -594,6 +610,7 @@ public:
 
   my_bool exclude(rpl_gtid *gtid);
   my_bool has_finished();
+  void write_warnings(FILE *out);
   void set_default_filter(Gtid_event_filter *default_filter);
 
   uint32 get_filter_type() { return DELEGATING_GTID_FILTER_TYPE; }

@@ -266,3 +266,22 @@ DROP TABLE t1;
 --echo # MYSQL_BINLOG BINLOG_FILE_PARAM --start-position=0-1-0 --stop-position=512 | MYSQL
 --exec $MYSQL_BINLOG $BINLOG_FILE_PARAM --start-position=0-1-0 --stop-position=512 | $MYSQL
 DROP TABLE t1;
+
+--echo #   Test Case 13:
+--echo #   Start position is delayed within the binlog
+CREATE TABLE t1 (a int);
+--echo # MYSQL_BINLOG BINLOG_FILE_PARAM --start-position=0-1-1 --stop-position=0-1-2 | MYSQL
+--exec $MYSQL_BINLOG $BINLOG_FILE_PARAM --start-position=0-1-1 --stop-position=0-1-2 | $MYSQL
+if ($test2_t1_good_checksum != `CHECKSUM TABLE t1`)
+{
+    die $data_inconsistent_err;
+}
+if (0 < `SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'test' AND table_name = 't2'`)
+{
+    die "t2 should not exist as binlog replay should exclude domain 1 from results";
+}
+--let $log_error_ = $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let SEARCH_FILE=$log_error_
+--let SEARCH_PATTERN=WARNING
+--source include/search_pattern_in_file.inc
+DROP TABLE t1;

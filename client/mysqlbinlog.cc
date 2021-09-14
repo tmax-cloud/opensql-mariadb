@@ -2153,13 +2153,7 @@ get_one_option(const struct my_option *opt, const char *argument, const char *fi
       {
         rpl_gtid *stop_gtid= &stop_gtids[gtid_idx];
         if (domain_gtid_filter->add_stop_gtid(stop_gtid))
-        {
-          sql_print_error(
-              "Domain id is invalid for GTID stop position %u-%u-%llu",
-              stop_gtid->domain_id, stop_gtid->server_id,
-              stop_gtid->seq_no);
           return 1;
-        }
       }
     }
     else
@@ -2202,13 +2196,7 @@ get_one_option(const struct my_option *opt, const char *argument, const char *fi
       {
         rpl_gtid *start_gtid= &start_gtids[gtid_idx];
         if (domain_gtid_filter->add_start_gtid(start_gtid))
-        {
-          sql_print_error(
-              "Domain id is invalid for GTID start position %u-%u-%llu",
-              start_gtid->domain_id, start_gtid->server_id,
-              start_gtid->seq_no);
           return 1;
-        }
       }
     }
     else
@@ -3396,6 +3384,9 @@ int main(int argc, char** argv)
               "*/;\n");
     }
   }
+
+  if (domain_gtid_filter)
+    domain_gtid_filter->write_warnings(stderr);
 
   if (tmpdir.list)
     free_tmpdir(&tmpdir);

@@ -2998,7 +2998,8 @@ Window_gtid_event_filter::Window_gtid_event_filter() :
   m_has_start(FALSE),
   m_has_stop(FALSE),
   m_is_active(FALSE),
-  m_has_passed(FALSE)
+  m_has_passed(FALSE),
+  m_warning_flags(0)
   {
     // m_start and m_stop do not need initial values if unused
   }
@@ -3012,11 +3013,18 @@ int Window_gtid_event_filter::set_start_gtid(rpl_gtid *start)
     goto err;
   }
 
-  if (m_has_stop && ((m_stop.domain_id != start->domain_id) ||
-                     (start->seq_no >= m_stop.seq_no)))
+  if (m_has_stop)
   {
-    err= 1;
-    goto err;
+    DBUG_ASSERT(m_stop.domain_id == start->domain_id);
+    if (start->seq_no >= m_stop.seq_no)
+    {
+      sql_print_error("stop position %d-%d-%llu is not strictly greater than "
+                      "its counterpart start position %d-%d-%llu",
+                      m_stop.domain_id, m_stop.server_id, m_stop.seq_no,
+                      start->domain_id, start->server_id, start->seq_no);
+      err= 1;
+      goto err;
+    }
   }
 
   // Copy values
@@ -3024,8 +3032,6 @@ int Window_gtid_event_filter::set_start_gtid(rpl_gtid *start)
   m_start.domain_id= start->domain_id;
   m_start.server_id= start->server_id;
   m_start.seq_no= start->seq_no;
-
-  last_gtid_seen= m_start;
 
 err:
   return err;
@@ -3040,11 +3046,18 @@ int Window_gtid_event_filter::set_stop_gtid(rpl_gtid *stop)
     goto err;
   }
 
-  if (m_has_start && ((m_start.domain_id != stop->domain_id) ||
-                      (m_start.seq_no >= stop->seq_no)))
+  if (m_has_start)
   {
-    err= 1;
-    goto err;
+    DBUG_ASSERT(m_start.domain_id == stop->domain_id);
+    if (m_start.seq_no >= stop->seq_no)
+    {
+      sql_print_error("stop position %d-%d-%llu is not strictly greater than "
+                      "its counterpart start position %d-%d-%llu",
+                      stop->domain_id, stop->server_id, stop->seq_no,
+                      m_start.domain_id, m_start.server_id, m_start.seq_no);
+      err= 1;
+      goto err;
+    }
   }
 
   // Copy values
@@ -3071,16 +3084,11 @@ static inline my_bool is_gtid_at_or_before(rpl_gtid *boundary,
          test_gtid->seq_no <= boundary->seq_no;
 }
 
-void Window_gtid_event_filter::assert_gtid_is_expected(rpl_gtid *gtid)
+void Window_gtid_event_filter::verify_gtid_is_expected(rpl_gtid *gtid)
 {
-  uint64 expect_gtid_seq_no= last_gtid_seen.seq_no + 1;
-  if (gtid->seq_no != expect_gtid_seq_no)
+  if (gtid->seq_no != last_gtid_seen.seq_no + 1)
   {
-    sql_print_error(
-        "GTID sequence number is out of order. Got: %llu, but expected: %llu",
-        gtid->seq_no, expect_gtid_seq_no);
-    sf_leaking_memory= 1;
-    exit(1);
+    m_warning_flags |= WARN_GTID_SEQUENCE_NUMBER_OUT_OF_ORDER;
   }
 
   last_gtid_seen.seq_no++;
@@ -3110,13 +3118,17 @@ my_bool Window_gtid_event_filter::exclude(rpl_gtid *gtid)
       */
       m_is_active= TRUE;
       should_exclude= FALSE;
+      last_gtid_seen= *gtid;
     }
     else if (is_gtid_at_or_after(&m_start, gtid) &&
              (!m_has_stop || is_gtid_at_or_before(&m_stop, gtid)))
     {
-      assert_gtid_is_expected(gtid);
-
       m_is_active= TRUE;
+
+      /*
+        Once the window has started, we expect GTIDs to be sequential from here on out
+      */
+      last_gtid_seen= *gtid;
 
       DBUG_PRINT("gtid-event-filter",
                  ("Window: Begin (%d-%d-%llu, %d-%d-%llu]", m_start.domain_id,
@@ -3140,7 +3152,7 @@ my_bool Window_gtid_event_filter::exclude(rpl_gtid *gtid)
       in the results. Additionally check if we are at the end of the window.
       If no end of the window is provided, go indefinitely
     */
-    assert_gtid_is_expected(gtid);
+    verify_gtid_is_expected(gtid);
     should_exclude= FALSE;
 
     if (m_has_stop && is_gtid_at_or_after(&m_stop, gtid))
@@ -3163,8 +3175,6 @@ my_bool Window_gtid_event_filter::exclude(rpl_gtid *gtid)
     }
   }
 
-  last_gtid_seen= *gtid;
-
   return should_exclude;
 }
 
@@ -3174,6 +3184,15 @@ my_bool Window_gtid_event_filter::has_finished()
     return FALSE;
 
   return last_gtid_seen.seq_no == m_stop.seq_no;
+}
+
+void Window_gtid_event_filter::write_warnings(FILE *out)
+{
+  if (m_warning_flags & WARN_GTID_SEQUENCE_NUMBER_OUT_OF_ORDER)
+  {
+    fprintf(out, "WARNING: "
+        "Found out of order GTID sequence number during event processing\n");
+  }
 }
 
 Id_delegating_gtid_event_filter::Id_delegating_gtid_event_filter()
@@ -3301,6 +3320,20 @@ my_bool Id_delegating_gtid_event_filter::has_finished()
   return m_num_completed_filters == m_num_explicit_filters;
 }
 
+void Id_delegating_gtid_event_filter::write_warnings(FILE *out)
+{
+  uint32 i;
+  for (i = 0; i <= m_filter_id_mask; i++)
+  {
+    gtid_filter_element *filter_element= m_filters_by_id[i];
+    while(filter_element && filter_element->filter)
+    {
+      filter_element->filter->write_warnings(out);
+      filter_element= filter_element->next;
+    }
+  }
+}
+
 my_bool Id_delegating_gtid_event_filter::exclude(rpl_gtid *gtid)
 {
   gtid_filter_identifier filter_id= get_id_from_gtid(gtid);
@@ -3341,10 +3374,16 @@ Domain_gtid_event_filter::find_or_create_window_filter_for_id(
     wgef= (Window_gtid_event_filter *)
               filter_element->filter->get_identified_filter();
   }
+  else
+  {
   /*
-    Else: We have an existing filter but it is not of window type so propogate
-    NULL filter
+     We have an existing filter but it is not of window type so propogate NULL
+     filter
   */
+    sql_print_error("cannot subset domain id %d by position, another rule "
+                    "exists on that domain",
+                    domain_id);
+  }
 
   return wgef;
 }

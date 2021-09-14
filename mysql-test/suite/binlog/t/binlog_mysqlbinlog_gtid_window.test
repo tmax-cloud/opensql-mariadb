@@ -40,21 +40,22 @@
 # --(start|stop)-position. If the checksums are identical, the test passes.
 # If the checksums differ, data has been changed and the test fails.
 #
-# Additionally, this test validates the following error scenarios:
+# Additionally, this test validates the following error and warning scenarios:
 #   Error Case 1) User provides invalid positions
 #   Error Case 2) User provides GTID ranges with repeated domain ids
 #   Error Case 3) --stop-position is not strictly greater than --start-position
-#   Error Case 4) A gap in sequence number at the beginning of a window results
-#                 in error
-#   Error Case 5) A gap in sequence number at the end of a window results in
-#                 error
-#   Error Case 6) A gap in sequence number within a window results in error
-#   Error Case 7) When invoked with just --start-position, a gap in sequence
-#                 number after the provided GTID results in error
-#   Error Case 8) When invoked with just --stop-position, a gap in sequence
-#                 number before the provided GTID results in error
-#   Error Case 9) One domain has a sequence number gap but another does not
-#                 results in error
+#
+#   Warning Case 1) A gap in sequence number at the beginning of a window results
+#                 in a warning
+#   Warning Case 2) A gap in sequence number at the end of a window results in
+#                 a warning
+#   Warning Case 3) A gap in sequence number within a window results in a warning
+#   Warning Case 4) When invoked with just --start-position, a gap in sequence
+#                 number after the provided GTID results in a warning
+#   Warning Case 5) When invoked with just --stop-position, a gap in sequence
+#                 number before the provided GTID results in a warning
+#   Warning Case 6) One domain has a sequence number gap but another does not
+#                 results in a warning
 #
 #
 # References:
@@ -141,9 +142,16 @@ RESET MASTER;
 --error 1
 --exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-2,1-2-1 --stop-position=0-1-1,1-2-2
 
+
+--echo ##############################
+--echo #      Warning Cases
+--echo ##############################
+--let $log_error_ = $MYSQLTEST_VARDIR/tmp/out.err
+--let SEARCH_FILE=$log_error_
+
 --echo #
---echo #   Error Case 4:
---echo #   A gap in sequence number at end of window results in error
+--echo #   Warning Case 1:
+--echo #   A gap in sequence number at end of window results in a warning
 RESET MASTER;
 SET @@session.gtid_domain_id= 0;
 SET @@session.server_id= 1;
@@ -153,14 +161,15 @@ INSERT INTO t1 values (2);
 SET @@session.gtid_seq_no= 5;
 INSERT INTO t1 values (3);
 FLUSH LOGS;
---echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 > MYSQLTEST_VARDIR/tmp/out.binlog
---error 1
---exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 > $MYSQLTEST_VARDIR/tmp/out.binlog
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 2> log_error_ > MYSQLTEST_VARDIR/tmp/out.binlog
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 2> $log_error_ > $MYSQLTEST_VARDIR/tmp/out.binlog
+--let SEARCH_PATTERN=WARNING
+--source include/search_pattern_in_file.inc
 DROP TABLE t1;
 
 --echo #
---echo #   Error Case 5:
---echo #   A gap in sequence number at beginning of window results in error
+--echo #   Warning Case 2:
+--echo #   A gap in sequence number at beginning of window results in a warning
 RESET MASTER;
 SET @@session.gtid_domain_id= 0;
 SET @@session.server_id= 1;
@@ -168,14 +177,15 @@ CREATE TABLE t1 (a int);
 SET @@session.gtid_seq_no= 3;
 INSERT INTO t1 values (1);
 FLUSH LOGS;
---echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1 > MYSQLTEST_VARDIR/tmp/out.binlog
---error 1
---exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1 > $MYSQLTEST_VARDIR/tmp/out.binlog
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1 > $log_error_ > MYSQLTEST_VARDIR/tmp/out.binlog
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-1 2> $log_error_ > $MYSQLTEST_VARDIR/tmp/out.binlog
+--let SEARCH_PATTERN=WARNING
+--source include/search_pattern_in_file.inc
 DROP TABLE t1;
 
 --echo #
---echo #   Error Case 6:
---echo #   A gap in sequence number within a window results in error
+--echo #   Warning Case 3:
+--echo #   A gap in sequence number within a window results in a warning
 RESET MASTER;
 SET @@session.gtid_domain_id= 0;
 SET @@session.server_id= 1;
@@ -184,15 +194,16 @@ INSERT INTO t1 values (1);
 SET @@session.gtid_seq_no= 4;
 INSERT INTO t1 values (2);
 FLUSH LOGS;
---echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 > MYSQLTEST_VARDIR/tmp/out.binlog
---error 1
---exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 > $MYSQLTEST_VARDIR/tmp/out.binlog
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 2> log_error_ > MYSQLTEST_VARDIR/tmp/out.binlog
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 --stop-position=0-1-4 2> $log_error_ > $MYSQLTEST_VARDIR/tmp/out.binlog
+--let SEARCH_PATTERN=WARNING
+--source include/search_pattern_in_file.inc
 DROP TABLE t1;
 
 --echo #
---echo #   Error Case 7:
+--echo #   Warning Case 4:
 --echo #   When invoked with just --start-position, a gap in sequence number
---echo # after the provided GTID results in error
+--echo # after the provided GTID results in a warning
 RESET MASTER;
 SET @@session.gtid_domain_id= 0;
 SET @@session.server_id= 1;
@@ -201,15 +212,16 @@ INSERT INTO t1 values (1);
 SET @@session.gtid_seq_no= 4;
 INSERT INTO t1 values (2);
 FLUSH LOGS;
---echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 > MYSQLTEST_VARDIR/tmp/out.binlog
---error 1
---exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 > $MYSQLTEST_VARDIR/tmp/out.binlog
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 2> log_error_ > MYSQLTEST_VARDIR/tmp/out.binlog
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0 2> $log_error_ > $MYSQLTEST_VARDIR/tmp/out.binlog
+--let SEARCH_PATTERN=WARNING
+--source include/search_pattern_in_file.inc
 DROP TABLE t1;
 
 --echo #
---echo #   Error Case 8:
+--echo #   Warning Case 5:
 --echo #   When invoked with just --stop-position, a gap in sequence number
---echo # before the provided GTID results in error
+--echo # before the provided GTID results in a warning
 RESET MASTER;
 SET @@session.gtid_domain_id= 0;
 SET @@session.server_id= 1;
@@ -218,15 +230,16 @@ INSERT INTO t1 values (1);
 SET @@session.gtid_seq_no= 4;
 INSERT INTO t1 values (2);
 FLUSH LOGS;
---echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --stop-position=0-1-4 > MYSQLTEST_VARDIR/tmp/out.binlog
---error 1
---exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --stop-position=0-1-4 > $MYSQLTEST_VARDIR/tmp/out.binlog
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --stop-position=0-1-4 2> log_error_ > MYSQLTEST_VARDIR/tmp/out.binlog
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --stop-position=0-1-4 2> $log_error_ > $MYSQLTEST_VARDIR/tmp/out.binlog
+--let SEARCH_PATTERN=WARNING
+--source include/search_pattern_in_file.inc
 DROP TABLE t1;
 
 --echo #
---echo #   Error Case 9:
+--echo #   Warning Case 6:
 --echo #   One domain has a sequence number gap but another does not results in
---echo # error
+--echo # a warning
 RESET MASTER;
 SET @@session.gtid_domain_id= 1;
 SET @@session.server_id= 2;
@@ -239,9 +252,11 @@ CREATE TABLE t1 (a int);
 INSERT INTO t1 values (1);
 SET @@session.gtid_seq_no= 4;
 INSERT INTO t1 values (2);
---echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0,1-2-0 --stop-position=0-1-4,1-2-3 > MYSQLTEST_VARDIR/tmp/out.binlog
---error 1
---exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0,1-2-0 --stop-position=0-1-4,1-2-3 > $MYSQLTEST_VARDIR/tmp/out.binlog
+FLUSH LOGS;
+--echo # MYSQL_BINLOG MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0,1-2-0 --stop-position=0-1-4,1-2-3 2> log_error_ > MYSQLTEST_VARDIR/tmp/out.binlog
+--exec $MYSQL_BINLOG $MYSQLD_DATADIR/master-bin.000001 --start-position=0-1-0,1-2-0 --stop-position=0-1-4,1-2-3 2> $log_error_ > $MYSQLTEST_VARDIR/tmp/out.binlog
+--let SEARCH_PATTERN=WARNING
+--source include/search_pattern_in_file.inc
 DROP TABLE t1;
 DROP TABLE t2;
 
