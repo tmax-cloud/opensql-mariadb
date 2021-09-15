@@ -3065,6 +3065,7 @@ void my_message_sql(uint error, const char *str, myf MyFlags)
   DBUG_ASSERT((MyFlags & ~(ME_BELL | ME_ERROR_LOG | ME_ERROR_LOG_ONLY |
                            ME_NOTE | ME_WARNING | ME_FATAL)) == 0);
 
+  assert(error != ER_LOCK_WAIT_TIMEOUT);
   if (MyFlags & ME_NOTE)
   {
     level= Sql_condition::WARN_LEVEL_NOTE;
