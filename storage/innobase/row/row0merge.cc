@@ -1061,11 +1061,11 @@ tuple field
 @param	blob_file	file to store the blob data */
 static dberr_t row_merge_buf_blob(
   const mtuple_t *entry, ulint n_fields,
-  mem_heap_t *heap, merge_file_t *blob_file)
+  mem_heap_t **heap, merge_file_t *blob_file)
 {
 
-  if (heap == nullptr)
-    heap= mem_heap_create(100);
+  if (*heap == nullptr)
+    *heap= mem_heap_create(100);
 
   for (ulint i= 0; i < n_fields; i++)
   {
@@ -1086,7 +1086,7 @@ static dberr_t row_merge_buf_blob(
       return err;
 
     byte *data= static_cast<byte*>(
-      mem_heap_alloc(heap, BTR_EXTERN_FIELD_REF_SIZE));
+      mem_heap_alloc(*heap, BTR_EXTERN_FIELD_REF_SIZE));
 
     /* Write zeroes for first 8 bytes */
     mach_write_to_8(data, 0);
@@ -1114,6 +1114,7 @@ row_merge_buf_write(
 	ulint			n_fields= dict_index_get_n_fields(index);
 	byte*			b	= &block[0];
 	mem_heap_t*		blob_heap = nullptr;
+	dberr_t			err = DB_SUCCESS;
 
 	DBUG_ENTER("row_merge_buf_write");
 
@@ -1122,10 +1123,10 @@ row_merge_buf_write(
 
 		if (blob_file) {
 			ut_ad(buf->index->is_primary());
-			dberr_t err = row_merge_buf_blob(
-				entry, n_fields, blob_heap, blob_file);
+			err = row_merge_buf_blob(
+				entry, n_fields, &blob_heap, blob_file);
 			if (err != DB_SUCCESS) {
-				DBUG_RETURN(err);
+				goto func_exit;
 			}
 		}
 
@@ -1151,12 +1152,12 @@ row_merge_buf_write(
 	DBUG_LOG("ib_merge_sort",
 		 "write " << reinterpret_cast<const void*>(b) << ','
 		 << of->fd << ',' << of->offset << " EOF");
-
+func_exit:
 	if (blob_heap) {
 		mem_heap_free(blob_heap);
 	}
 
-	DBUG_RETURN(DB_SUCCESS);
+	DBUG_RETURN(err);
 }
 
 /******************************************************//**
