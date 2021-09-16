@@ -466,21 +466,21 @@ int json_unescape_json(const char *json_str, const char *json_end,
 }
 extern "C" {
 extern struct sql_service_st {
-  MYSQL *(STDCALL *mysql_init_func)(MYSQL *mysql);
+  MYSQL *( *mysql_init_func)(MYSQL *mysql);
   MYSQL *(*mysql_real_connect_local_func)(MYSQL *mysql);
-  MYSQL *(STDCALL *mysql_real_connect_func)(MYSQL *mysql, const char *host,
+  MYSQL *( *mysql_real_connect_func)(MYSQL *mysql, const char *host,
       const char *user, const char *passwd, const char *db, unsigned int port,
       const char *unix_socket, unsigned long clientflag);
-  unsigned int(STDCALL *mysql_errno_func)(MYSQL *mysql);
-  const char *(STDCALL *mysql_error_func)(MYSQL *mysql);
-  int (STDCALL *mysql_real_query_func)(MYSQL *mysql, const char *q,
+  unsigned int( *mysql_errno_func)(MYSQL *mysql);
+  const char *( *mysql_error_func)(MYSQL *mysql);
+  int ( *mysql_real_query_func)(MYSQL *mysql, const char *q,
                                   unsigned long length);
-  my_ulonglong (STDCALL *mysql_affected_rows_func)(MYSQL *mysql);
-  my_ulonglong (STDCALL *mysql_num_rows_func)(MYSQL_RES *res);
-  MYSQL_RES *(STDCALL *mysql_store_result_func)(MYSQL *mysql);
-  void (STDCALL *mysql_free_result_func)(MYSQL_RES *result);
-  MYSQL_ROW (STDCALL *mysql_fetch_row_func)(MYSQL_RES *result);
-  void (STDCALL *mysql_close_func)(MYSQL *mysql);
+  my_ulonglong ( *mysql_affected_rows_func)(MYSQL *mysql);
+  my_ulonglong ( *mysql_num_rows_func)(MYSQL_RES *res);
+  MYSQL_RES *( *mysql_store_result_func)(MYSQL *mysql);
+  void ( *mysql_free_result_func)(MYSQL_RES *result);
+  MYSQL_ROW ( *mysql_fetch_row_func)(MYSQL_RES *result);
+  void ( *mysql_close_func)(MYSQL *mysql);
 } *sql_service;
 MYSQL *mysql_real_connect_local(MYSQL *mysql);
 }
