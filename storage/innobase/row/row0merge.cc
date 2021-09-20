@@ -1069,7 +1069,7 @@ static dberr_t row_merge_buf_blob(
 
   for (ulint i= 0; i < n_fields; i++)
   {
-    if (entry->fields[i].len <= 2000)
+    if (dfield_is_null(&entry->fields[i]) || entry->fields[i].len <= 2000)
       continue;
 
     if (blob_file->fd == OS_FILE_CLOSED)
