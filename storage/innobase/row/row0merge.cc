@@ -4985,8 +4985,7 @@ dberr_t row_merge_bulk_t::alloc_block()
   return DB_SUCCESS;
 }
 
-row_merge_bulk_t::row_merge_bulk_t(dict_table_t *table,
-                                   dberr_t &err)
+row_merge_bulk_t::row_merge_bulk_t(dict_table_t *table)
 {
   ulint n_index= 0;
   for (dict_index_t *index= UT_LIST_GET_FIRST(table->indexes);
@@ -5000,9 +4999,6 @@ row_merge_bulk_t::row_merge_bulk_t(dict_table_t *table,
   m_merge_buf= static_cast<row_merge_buf_t*>(
     ut_zalloc_nokey(n_index * sizeof *m_merge_buf));
 
-  m_merge_files= static_cast<merge_file_t*>(
-    ut_malloc_nokey(n_index * sizeof *m_merge_files));
-
   ulint i= 0;
   for (dict_index_t *index= UT_LIST_GET_FIRST(table->indexes);
        index; index= UT_LIST_GET_NEXT(indexes, index))
@@ -5012,9 +5008,6 @@ row_merge_bulk_t::row_merge_bulk_t(dict_table_t *table,
 
     mem_heap_t *heap= mem_heap_create(100);
     row_merge_buf_create_low(&m_merge_buf[i], heap, index);
-    m_merge_files[i].fd= OS_FILE_CLOSED;
-    m_merge_files[i].offset= 0;
-    m_merge_files[i].n_rec= 0;
     i++;
   }
 
@@ -5034,7 +5027,8 @@ row_merge_bulk_t::~row_merge_bulk_t()
     if (index->type & DICT_FTS)
       continue;
     row_merge_buf_free(&m_merge_buf[i]);
-    row_merge_file_destroy(&m_merge_files[i]);
+    if (m_merge_files)
+      row_merge_file_destroy(&m_merge_files[i]);
     i++;
   }
 
@@ -5048,6 +5042,32 @@ row_merge_bulk_t::~row_merge_bulk_t()
 
   if (m_block)
     m_alloc.deallocate_large(m_block, &m_block_pfx);
+}
+
+void row_merge_bulk_t::init_tmp_file()
+{
+  if (m_merge_files)
+    return;
+
+  ulint n_index= 0;
+  dict_table_t *table= m_merge_buf[0].index->table;
+  for (dict_index_t *index= UT_LIST_GET_FIRST(table->indexes);
+       index; index= UT_LIST_GET_NEXT(indexes, index))
+  {
+    if (index->type & DICT_FTS)
+      continue;
+    n_index++;
+  }
+
+  m_merge_files= static_cast<merge_file_t*>(
+    ut_malloc_nokey(n_index * sizeof *m_merge_files));
+
+  for (ulint i= 0; i < n_index; i++)
+  {
+    m_merge_files[i].fd= OS_FILE_CLOSED;
+    m_merge_files[i].offset= 0;
+    m_merge_files[i].n_rec= 0;
+  }
 }
 
 void row_merge_bulk_t::clean_bulk_buffer(ulint index_no)
@@ -5103,7 +5123,6 @@ dberr_t row_merge_bulk_t::bulk_insert_buffered(
        continue;
      }
      row_merge_buf_t *buf= &m_merge_buf[i];
-     merge_file_t *file= &m_merge_files[i];
 add_to_buf:
     if (row_merge_bulk_buf_add(buf, ind->table, row, trx))
     {
@@ -5119,6 +5138,8 @@ add_to_buf:
         return DB_DUPLICATE_KEY;
     }
     else row_merge_buf_sort(buf, NULL);
+    init_tmp_file();
+    merge_file_t *file= &m_merge_files[i];
     file->n_rec+= buf->n_tuples;
     err= write_to_tmp_file(i);
     if (err != DB_SUCCESS)
@@ -5150,7 +5171,7 @@ dberr_t row_merge_bulk_t::write_to_index(ulint index_no, trx_t *trx)
         return DB_DUPLICATE_KEY;
     }
     else row_merge_buf_sort(&buf, NULL);
-    if (file->fd != OS_FILE_CLOSED)
+    if (file && file->fd != OS_FILE_CLOSED)
     {
       file->n_rec+= buf.n_tuples;
       err= write_to_tmp_file(index_no);

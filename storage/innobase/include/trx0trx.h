@@ -448,14 +448,7 @@ public:
     first|= BULK;
     if (table->is_temporary())
       return true;
-    dberr_t err= DB_SUCCESS;
-    bulk_store= new row_merge_bulk_t(table, err);
-    if (err != DB_SUCCESS)
-    {
-      delete bulk_store;
-      bulk_store= nullptr;
-      return false;
-    }
+    bulk_store= new row_merge_bulk_t(table);
     return true;
   }
 

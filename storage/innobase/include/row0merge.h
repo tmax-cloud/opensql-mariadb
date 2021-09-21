@@ -420,7 +420,7 @@ class row_merge_bulk_t
   /** Block for IO operation */
   row_merge_block_t *m_block= nullptr;
   /** File to store the buffer and used for merge sort */
-  merge_file_t *m_merge_files;
+  merge_file_t *m_merge_files= nullptr;
   /** Temporary file to be used for merge sort */
   pfs_os_file_t m_tmpfd;
   /** Allocate memory for merge file data structure */
@@ -434,9 +434,8 @@ public:
   Create all merge files, merge buffer for all the table indexes
   expect fts indexes.
   Create a merge block which is used to write IO operation
-  @param table	table which undergoes bulk insert operation
-  @param err	error to return if memory allocation fails */
-  row_merge_bulk_t(dict_table_t *table, dberr_t &err);
+  @param table	table which undergoes bulk insert operation */
+  row_merge_bulk_t(dict_table_t *table);
 
   /* Destructor.
   Remove all merge files, merge buffer for all table indexes. */
@@ -483,6 +482,9 @@ public:
 
   /** Allocate block for writing the buffer into disk */
   dberr_t alloc_block();
+
+  /** Init temporary files for each index */
+  void init_tmp_file();
 };
 
 #endif /* row0merge.h */
