@@ -1561,21 +1561,3 @@ dict_index_t::vers_history_row(
 	}
 	return(error);
 }
-
-/** @return true if table is system versioned and the index is
-FTS_DOC_ID_INDEX */
-bool
-dict_index_t::vers_skip_fts_doc_id() const
-{
-	/* Unique indexes with system versioning must contain
-	the row_end column. The only exception is a hidden
-	FTS_DOC_ID_INDEX that InnoDB may create on a hidden or
-	user-created FTS_DOC_ID column. */
-	if (table->versioned()
-		&& (type & DICT_UNIQUE) && n_uniq == 1) {
-		ut_ad(!strcmp(name, FTS_DOC_ID_INDEX_NAME));
-		ut_ad(!strcmp(fields[0].name, FTS_DOC_ID_COL_NAME));
-		return true;
-	}
-	return false;
-};

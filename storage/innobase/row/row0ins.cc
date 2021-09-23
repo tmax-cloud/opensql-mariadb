@@ -3587,8 +3587,7 @@ row_ins_get_row_from_select(
 inline
 bool ins_node_t::vers_history_row() const
 {
-	if (!table->versioned())
-		return false;
+	ut_ad(table->versioned());
 	dfield_t* row_end = dtuple_get_nth_field(row, table->vers_end);
 	return row_end->vers_history_row();
 }
@@ -3641,7 +3640,7 @@ row_ins(
 		   FTS_DOC_ID for history is enough.
 		*/
 		if (index->type & DICT_FTS) {
-		} else if (!(index->vers_skip_fts_doc_id()
+		} else if (!(index->vers_fulltext()
 			     && node->vers_history_row())) {
 
 			dberr_t err = row_ins_index_entry_step(node, thr);
