@@ -58,6 +58,7 @@ Modified Dec 29, 2014 Jan Lindström (Added sys_semaphore_waits)
 #include "fil0fil.h"
 #include "fil0crypt.h"
 #include "dict0crea.h"
+#include "fts0vlc.h"
 
 /** The latest successfully looked up innodb_fts_aux_table */
 UNIV_INTERN table_id_t innodb_ft_aux_table_id;
@@ -2785,7 +2786,7 @@ i_s_fts_index_cache_fill_one_index(
 			ptr = node->ilist;
 
 			while (decoded < node->ilist_size) {
-				ulint	pos = fts_decode_vlc(&ptr);
+				doc_id_t pos = fts_decode_vlc(&ptr);
 
 				doc_id += pos;
 
@@ -3156,7 +3157,7 @@ i_s_fts_index_table_fill_one_fetch(
 			ptr = node->ilist;
 
 			while (decoded < node->ilist_size) {
-				ulint	pos = fts_decode_vlc(&ptr);
+				doc_id_t pos = fts_decode_vlc(&ptr);
 
 				doc_id += pos;
 

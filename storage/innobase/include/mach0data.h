@@ -316,6 +316,41 @@ mach_read_from_n_little_endian(
 	const byte*	buf,		/*!< in: from where to read */
 	ulint		buf_size)	/*!< in: from how many bytes to read */
 	MY_ATTRIBUTE((warn_unused_result));
+
+
+/** Reads a 64 bit stored in big endian format
+@param	buf		From where to read
+@param	buf_size	How many bytes to read
+@return uint64_t */
+UNIV_INLINE
+uint64_t
+mach_read_uint64_little_endian(const byte* buf, ulint buf_size)
+{
+#ifdef WORDS_BIGENDIAN
+  uint64_t n = 0;
+  const byte *ptr;
+
+  ut_ad(buf_size > 0);
+  ptr = buf + sizeof(uint64_t);
+
+  for (;;)
+  {
+    ptr--;
+    n= n << 8;
+    n+= (ulint)(*ptr);
+
+    if (ptr == buf)
+      break;
+  }
+
+  return(n);
+#else
+  uint64_t n;
+  memcpy(&n, buf, sizeof(uint64_t));
+  return n;
+#endif
+}
+
 /*********************************************************//**
 Writes a ulint in the little-endian format. */
 UNIV_INLINE

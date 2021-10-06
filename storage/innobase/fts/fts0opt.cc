@@ -36,6 +36,7 @@ Completed 2011/7/10 Sunny and Jimmy Yang
 #include "ut0list.h"
 #include "zlib.h"
 #include "fts0opt.h"
+#include "fts0vlc.h"
 
 /** The FTS optimize thread's work queue. */
 ib_wqueue_t* fts_optimize_wq;
@@ -1173,7 +1174,7 @@ fts_optimize_encode_node(
 
 	/* Encode the doc id. Cast to ulint, the delta should be small and
 	therefore no loss of precision. */
-	dst += fts_encode_int((ulint) doc_id_delta, dst);
+	dst += fts_encode_int(doc_id_delta, dst);
 
 	/* Copy the encoded pos array. */
 	memcpy(dst, src, pos_enc_len);

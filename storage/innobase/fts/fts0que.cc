@@ -34,6 +34,7 @@ Completed 2011/7/10 Sunny and Jimmy Yang
 #include "fts0pars.h"
 #include "fts0types.h"
 #include "fts0plugin.h"
+#include "fts0vlc.h"
 
 #include <iomanip>
 #include <vector>
@@ -3234,8 +3235,8 @@ fts_query_filter_doc_ids(
 		ulint		freq = 0;
 		fts_doc_freq_t*	doc_freq;
 		fts_match_t*	match = NULL;
-		ulint		last_pos = 0;
-		ulint		pos = fts_decode_vlc(&ptr);
+		doc_id_t	last_pos = 0;
+		doc_id_t	pos = fts_decode_vlc(&ptr);
 
 		/* Some sanity checks. */
 		if (doc_id == 0) {
