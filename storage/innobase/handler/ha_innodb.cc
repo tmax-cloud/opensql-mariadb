@@ -18479,7 +18479,7 @@ void lock_wait_wsrep_kill(trx_t *bf_trx, ulong thd_id, trx_id_t trx_id)
     if (vtrx)
     {
       lock_sys.wr_lock(SRW_LOCK_CALL);
-      mysql_mutex_lock(&lock_sys.wait_mutex);
+      lock_sys.wait_mutex_lock();
       vtrx->mutex_lock();
       /* victim transaction is either active or prepared, if it has already
 	 proceeded to replication phase */
@@ -18524,7 +18524,7 @@ void lock_wait_wsrep_kill(trx_t *bf_trx, ulong thd_id, trx_id_t trx_id)
         }
       }
       lock_sys.wr_unlock();
-      mysql_mutex_unlock(&lock_sys.wait_mutex);
+      lock_sys.wait_mutex_unlock();
       vtrx->mutex_unlock();
     }
     wsrep_thd_UNLOCK(vthd);
