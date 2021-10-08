@@ -19727,7 +19727,9 @@ wsrep_innobase_kill_one_trx(
 	/* Here we need to lock THD::LOCK_thd_data to protect from
 	concurrent usage or disconnect or delete. */
 	DEBUG_SYNC(bf_thd, "wsrep_before_BF_victim_lock");
+	my_sleep(100000);
 	wsrep_thd_LOCK(thd);
+	my_sleep(100000);
 	DEBUG_SYNC(bf_thd, "wsrep_after_BF_victim_lock");
 
 	WSREP_DEBUG("Aborter %s trx_id: " TRX_ID_FMT " thread: %ld "
@@ -19809,14 +19811,12 @@ wsrep_abort_transaction(
 		wsrep_thd_UNLOCK(victim_thd);
 		// both victim thread and trx unprotected
 		DEBUG_SYNC(bf_thd, "wsrep_abort_victim_unlocked");
-		DBUG_EXECUTE_IF("wsrep_abort_replicated_sleep",
-				WSREP_DEBUG("wsrep_abort_transaction: sleeping "
-					    "for thread %ld ",
-					    thd_get_thread_id(victim_thd));
-				my_sleep(100000););
+		my_sleep(100000);
 		lock_mutex_enter();
+		my_sleep(100000);
 		if (trx_t* victim= trx_rw_is_active(victim_trx_id, NULL, true)) {
 			// We have obtained reference to victim trx if found
+			my_sleep(100000);
 			trx_mutex_enter(victim);
 			if (THD* thd= find_thread_by_id(victim_thread_id)) {
 				// We have locked THD::LOCK_thd_data
