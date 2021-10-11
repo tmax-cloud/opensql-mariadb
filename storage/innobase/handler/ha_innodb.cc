@@ -19813,11 +19813,14 @@ wsrep_abort_transaction(
 		DEBUG_SYNC(bf_thd, "wsrep_abort_victim_unlocked");
 		my_sleep(100000);
 		lock_mutex_enter();
+		DEBUG_SYNC(bf_thd, "wsrep_abort_lock_sys_locked");
 		my_sleep(100000);
 		if (trx_t* victim= trx_rw_is_active(victim_trx_id, NULL, true)) {
 			// We have obtained reference to victim trx if found
 			my_sleep(100000);
+			DEBUG_SYNC(bf_thd, "wsrep_abort_trx_referenced");
 			trx_mutex_enter(victim);
+			DEBUG_SYNC(bf_thd, "wsrep_abort_trx_locked");
 			if (THD* thd= find_thread_by_id(victim_thread_id)) {
 				// We have locked THD::LOCK_thd_data
 				// and victim thread can't go away
