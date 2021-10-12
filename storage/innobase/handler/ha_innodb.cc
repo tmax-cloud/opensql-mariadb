@@ -19635,8 +19635,6 @@ wsrep_kill_victim(
 		WSREP_DEBUG("kill trx QUERY_EXEC for " TRX_ID_FMT,
 			    victim_trx->id);
 
-		victim_trx->lock.was_chosen_as_deadlock_victim= TRUE;
-
 		if (victim_trx->lock.wait_lock) {
 			WSREP_DEBUG("victim has wait flag: %ld",
 				thd_get_thread_id(thd));
