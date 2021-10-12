@@ -167,7 +167,7 @@ wsrep_ws_handle(THD* thd, const trx_t* trx) {
 
 extern TC_LOG* tc_log;
 extern void wsrep_cleanup_transaction(THD *thd);
-static void wsrep_abort_transaction(handlerton*, THD *, THD *, my_bool);
+static void wsrep_abort_transaction(handlerton*, THD *, THD *, my_bool, my_bool);
 static void wsrep_fake_trx_id(handlerton* hton, THD *thd);
 static int innobase_wsrep_set_checkpoint(handlerton* hton, const XID* xid);
 static int innobase_wsrep_get_checkpoint(handlerton* hton, XID* xid);
@@ -19765,7 +19765,8 @@ wsrep_abort_transaction(
 	handlerton* hton,
 	THD *bf_thd,
 	THD *victim_thd,
-	my_bool signal)
+	my_bool signal,
+	my_bool thread_list_locked)
 {
 	DBUG_ENTER("wsrep_abort_transaction");
 
@@ -19821,7 +19822,11 @@ wsrep_abort_transaction(
 			DEBUG_SYNC(bf_thd, "wsrep_abort_trx_referenced");
 			trx_mutex_enter(victim);
 			DEBUG_SYNC(bf_thd, "wsrep_abort_trx_locked");
-			if (THD* thd= find_thread_by_id(victim_thread_id)) {
+			// LOCK_thread_list is locked if we have used
+			// wsrep_close_connections
+			if (THD* thd= (thread_list_locked ?
+				       find_thread_by_id(victim_thread_id) :
+				       find_thread_by_id_nomutex(victim_thread_id))) {
 				// We have locked THD::LOCK_thd_data
 				// and victim thread can't go away
 				DEBUG_SYNC(bf_thd, "wsrep_abort_victim_locked");

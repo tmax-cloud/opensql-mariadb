@@ -8899,7 +8899,7 @@ void add_join_natural(TABLE_LIST *a, TABLE_LIST *b, List<String> *using_fields,
 THD *find_thread_by_id(longlong id, bool query_id)
 {
   THD *tmp;
-  mysql_mutex_lock(&LOCK_thread_count); // For unlink from list
+  mysql_mutex_assert_owner(&LOCK_thread_count);
   I_List_iterator<THD> it(threads);
   while ((tmp=it++))
   {
@@ -8911,10 +8911,17 @@ THD *find_thread_by_id(longlong id, bool query_id)
       break;
     }
   }
-  mysql_mutex_unlock(&LOCK_thread_count);
   return tmp;
 }
 
+THD* find_thread_by_id_nomutex(longlong id, bool query_id)
+{
+  THD *tmp;
+  mysql_mutex_lock(&LOCK_thread_count); // For unlink from list
+  tmp= find_thread_by_id(id, query_id);
+  mysql_mutex_unlock(&LOCK_thread_count);
+  return tmp;
+}
 
 /**
   kill one thread.
@@ -8936,7 +8943,7 @@ kill_one_thread(THD *thd, longlong id, killed_state kill_signal, killed_type typ
   DBUG_ENTER("kill_one_thread");
   DBUG_PRINT("enter", ("id: %lld  signal: %u", id, (uint) kill_signal));
 
-  if (id && (tmp= find_thread_by_id(id, type == KILL_TYPE_QUERY)))
+  if (id && (tmp= find_thread_by_id_nomutex(id, type == KILL_TYPE_QUERY)))
   {
     /*
       If we're SUPER, we can KILL anything, including system-threads.

@@ -802,7 +802,8 @@ my_bool wsrep_thd_is_local(void *thd_ptr, my_bool sync)
   return status;
 }
 
-int wsrep_abort_thd(void *bf_thd_ptr, void *victim_thd_ptr, my_bool signal)
+int wsrep_abort_thd(void *bf_thd_ptr, void *victim_thd_ptr,
+                    my_bool signal, my_bool thread_list_locked)
 {
   THD *victim_thd= (THD *) victim_thd_ptr;
   THD *bf_thd= (THD *) bf_thd_ptr;
@@ -829,7 +830,7 @@ int wsrep_abort_thd(void *bf_thd_ptr, void *victim_thd_ptr, my_bool signal)
 
     WSREP_DEBUG("wsrep_abort_thd, by: %llu, victim: %llu", (bf_thd) ?
                 (long long)bf_thd->real_id : 0, (long long)victim_thd->real_id);
-    ha_abort_transaction(bf_thd, victim_thd, signal);
+    ha_abort_transaction(bf_thd, victim_thd, signal, thread_list_locked);
   }
   else
   {

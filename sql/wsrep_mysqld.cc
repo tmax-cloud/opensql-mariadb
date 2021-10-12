@@ -2266,7 +2266,7 @@ static bool abort_replicated(THD *thd)
   {
     WSREP_DEBUG("aborting replicated trx: %llu", (ulonglong)(thd->real_id));
 
-    (void)wsrep_abort_thd(thd, thd, TRUE);
+    (void)wsrep_abort_thd(thd, thd, TRUE, TRUE);
     ret_code= true;
   }
   return ret_code;
