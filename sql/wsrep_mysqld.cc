@@ -2316,6 +2316,8 @@ static bool have_client_connections()
                        (longlong) tmp->thread_id));
     if (is_client_connection(tmp) && tmp->killed == KILL_CONNECTION)
     {
+      WSREP_DEBUG("Informing thread %lld that it's time to die",
+                  (longlong)tmp->thread_id);
       if (!abort_replicated(tmp))
         mysql_mutex_unlock(&tmp->LOCK_thd_data);
       return true;
@@ -2411,6 +2413,8 @@ void wsrep_close_client_connections(my_bool wait_to_end, THD *except_caller_thd)
                        (longlong) tmp->thread_id));
     /* Protect from concurrent usage or disconnect or delete */
     mysql_mutex_lock(&tmp->LOCK_thd_data);
+    WSREP_DEBUG("Informing thread %lld that it's time to die",
+                (longlong)tmp->thread_id);
     /* We skip slave threads & scheduler on this first loop through. */
     if (!is_client_connection(tmp))
     {
