@@ -3670,8 +3670,12 @@ static const char* ha_innobase_exts[] = {
 @retval	0	if no system-versioned data was affected by the transaction */
 static ulonglong innodb_prepare_commit_versioned(THD* thd, ulonglong *trx_id)
 {
-	if (const trx_t* trx = thd_to_trx(thd)) {
+	if (trx_t* trx = thd_to_trx(thd)) {
 		*trx_id = trx->id;
+
+		if (trx->bulk_insert_apply() != DB_SUCCESS) {
+			return ULONG_MAX;
+		}
 
 		for (const auto& t : trx->mod_tables) {
 			if (t.second.is_versioned()) {
@@ -3689,6 +3693,7 @@ static ulonglong innodb_prepare_commit_versioned(THD* thd, ulonglong *trx_id)
 	return 0;
 }
 
+#if 0
 /** Apply all bulk buffered insert operations by the transaction.
 @param[in,out]	thd	current session
 @retval	0 If bulk insert write happnes successfully */
@@ -3699,6 +3704,7 @@ static int innodb_bulk_insert_write(THD* thd)
       return 1;
   return 0;
 }
+#endif
 
 /** Initialize and normalize innodb_buffer_pool_size. */
 static void innodb_buffer_pool_size_init()
@@ -4127,8 +4133,6 @@ static int innodb_init(void* p)
 	/* System Versioning */
 	innobase_hton->prepare_commit_versioned
 		= innodb_prepare_commit_versioned;
-
-	innobase_hton->bulk_insert_write = innodb_bulk_insert_write;
 
 	innodb_remember_check_sysvar_funcs();
 
