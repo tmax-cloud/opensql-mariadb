@@ -20,6 +20,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "univ.i"
 #include "rw_lock.h"
 
+/** Acquire a mutex in a spinloop. */
+void innodb_spin_mutex_lock(mysql_mutex_t *mutex);
+
 #ifdef SUX_LOCK_GENERIC
 /** An exclusive-only variant of srw_lock */
 template<bool spinloop>

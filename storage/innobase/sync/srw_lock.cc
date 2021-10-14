@@ -35,6 +35,21 @@ static inline void srw_pause(unsigned delay)
   HMT_medium();
 }
 
+/** Acquire a mutex in a spinloop. */
+void innodb_spin_mutex_lock(mysql_mutex_t *mutex)
+{
+  const unsigned delay= srw_pause_delay();
+
+  for (auto spin= srv_n_spin_wait_rounds; spin; spin--)
+  {
+    srw_pause(delay);
+    if (!mysql_mutex_trylock(mutex))
+      return;
+  }
+
+  mysql_mutex_lock(mutex);
+}
+
 #ifdef SUX_LOCK_GENERIC
 template<> void srw_mutex_impl<true>::wr_wait()
 {

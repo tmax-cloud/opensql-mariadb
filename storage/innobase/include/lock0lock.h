@@ -38,7 +38,6 @@ Created 5/7/1996 Heikki Tuuri
 #include "ut0vec.h"
 #include "gis0rtree.h"
 #include "lock0prdt.h"
-#include "my_cpu.h"
 
 // Forward declaration
 class ReadView;
@@ -706,16 +705,10 @@ public:
     {
       if (!mysql_mutex_trylock(&wait_mutex))
         return;
-
-      for (auto spin= srv_n_spin_wait_rounds; spin; spin--)
-      {
-        ut_delay(srv_spin_wait_delay);
-        if (!mysql_mutex_trylock(&wait_mutex))
-         return;
-      }
+      innodb_spin_mutex_lock(&wait_mutex);
     }
-
-    mysql_mutex_lock(&wait_mutex);
+    else
+      mysql_mutex_lock(&wait_mutex);
   }
 
   void wait_mutex_unlock()
