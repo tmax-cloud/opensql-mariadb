@@ -10960,7 +10960,7 @@ copy_data_between_tables(THD *thd, TABLE *from, TABLE *to,
 
       THD_STAGE_INFO(thd, stage_sorting);
       Filesort_tracker dummy_tracker(false);
-      Filesort fsort(order, HA_POS_ERROR, true, NULL);
+      Filesort fsort(order, HA_POS_ERROR, true, NULL,false);
 
       if (thd->lex->first_select_lex()->setup_ref_array(thd, order_num) ||
           setup_order(thd, thd->lex->first_select_lex()->ref_pointer_array,

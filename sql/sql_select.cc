@@ -4128,7 +4128,7 @@ JOIN::add_sorting_to_table(JOIN_TAB *tab, ORDER *order)
 {
   tab->filesort= 
     new (thd->mem_root) Filesort(order, HA_POS_ERROR, tab->keep_current_rowid,
-                                 tab->select);
+                                 tab->select, false);
   if (!tab->filesort)
     return true;
 

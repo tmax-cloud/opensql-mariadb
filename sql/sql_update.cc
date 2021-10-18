@@ -793,7 +793,7 @@ int mysql_update(THD *thd,
 	to update
         NOTE: filesort will call table->prepare_for_position()
       */
-      Filesort fsort(order, limit, true, select);
+      Filesort fsort(order, limit, true, select, false);
 
       Filesort_tracker *fs_tracker= 
         thd->lex->explain->get_upd_del_plan()->filesort_tracker;

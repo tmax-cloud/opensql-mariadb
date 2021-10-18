@@ -72,9 +72,10 @@ public:
 
   /* Unpack temp table columns to base table columns*/
   void (*unpack)(TABLE *);
+  bool modify_m_current_row_for_warning;
 
   Filesort(ORDER *order_arg, ha_rows limit_arg, bool sort_positions_arg,
-           SQL_SELECT *select_arg):
+           SQL_SELECT *select_arg, bool flag):
     order(order_arg),
     limit(limit_arg),
     sortorder(NULL),
@@ -85,7 +86,8 @@ public:
     sort_positions(sort_positions_arg),
     set_all_read_bits(false),
     sort_keys(NULL),
-    unpack(NULL)
+    unpack(NULL),
+    modify_m_current_row_for_warning(flag)
   {
     DBUG_ASSERT(order);
   };

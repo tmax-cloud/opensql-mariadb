@@ -3083,7 +3083,7 @@ bool Window_funcs_sort::setup(THD *thd, SQL_SELECT *sel,
     order->field= join_tab->table->field[0];
     sort_order= order;
   }
-  filesort= new (thd->mem_root) Filesort(sort_order, HA_POS_ERROR, true, NULL);
+  filesort= new (thd->mem_root) Filesort(sort_order, HA_POS_ERROR, true, NULL, false);
 
   /* Apply the same condition that the subsequent sort has. */
   filesort->select= sel;
