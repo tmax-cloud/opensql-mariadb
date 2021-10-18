@@ -842,7 +842,7 @@ bool mysql_insert(THD *thd, TABLE_LIST *table_list,
     switch_to_nullable_trigger_fields(*values, table);
   }
   its.rewind ();
-  thd->get_stmt_da()->reset_current_row_for_warning(1);
+  thd->get_stmt_da()->reset_current_row_for_warning(0);
  
   /* Restore the current context. */
   ctx_state.restore_state(context, table_list);
@@ -1009,6 +1009,7 @@ bool mysql_insert(THD *thd, TABLE_LIST *table_list,
 
     while ((values= its++))
     {
+      thd->get_stmt_da()->inc_current_row_for_warning();
       if (fields.elements || !value_count)
       {
         /*
@@ -1125,7 +1126,6 @@ bool mysql_insert(THD *thd, TABLE_LIST *table_list,
       if (unlikely(error))
         break;
       info.accepted_rows++;
-      thd->get_stmt_da()->inc_current_row_for_warning();
     }
     its.rewind();
     iteration++;

@@ -1601,3 +1601,17 @@ GET DIAGNOSTICS CONDITION 1 @row_num= ROW_NUMBER;
 SELECT @row_num;
 
 DROP PROCEDURE resignal_syntax;
+
+--echo #
+--echo # MDEV-26830: Wrong ROW_NUMBER in diagnostics upon INSERT IGNORE with
+--echo # CHECK violation
+--echo #
+
+CREATE TABLE t1 (a INT, CHECK(a>0));
+INSERT IGNORE INTO t1 VALUES (1),(0),(2),(0);
+GET DIAGNOSTICS CONDITION 1 @n= ROW_NUMBER;
+SELECT @n;
+GET DIAGNOSTICS CONDITION 2 @n= ROW_NUMBER;
+SELECT @n;
+
+DROP TABLE t1;
