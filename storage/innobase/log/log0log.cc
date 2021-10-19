@@ -1148,14 +1148,19 @@ wait_suspend_loop:
 
 	if (!buf_pool.is_initialised()) {
 		ut_ad(!srv_was_started);
-	} else if (ulint pending_io = buf_pool.io_pending()) {
+	} else if (const ulint writes = os_aio_pending_writes()) {
+wait_for_io:
 		if (srv_print_verbose_log && count > 600) {
-			ib::info() << "Waiting for " << pending_io << " buffer"
-				" page I/Os to complete";
+			ib::info() << "Waiting for "
+				   << buf_pool.n_pend_reads + writes
+				   << " buffer page I/Os to complete";
 			count = 0;
 		}
 
+		os_aio_wait_until_no_pending_writes();
 		goto loop;
+	} else if (buf_pool.any_io_pending()) {
+		goto wait_for_io;
 	} else {
 		buf_flush_buffer_pool();
 	}

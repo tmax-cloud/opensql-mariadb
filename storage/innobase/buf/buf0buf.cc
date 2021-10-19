@@ -1504,7 +1504,7 @@ inline bool buf_pool_t::withdraw_blocks()
 				std::max<ulint>(withdraw_target
 						- UT_LIST_GET_LEN(withdraw),
 						srv_LRU_scan_depth));
-			buf_flush_wait_batch_end_acquiring_mutex(true);
+			buf_flush_wait_LRU_batch_end_acquiring_mutex();
 		}
 
 		/* relocate blocks/buddies in withdrawn area */
@@ -3222,9 +3222,9 @@ static buf_block_t* buf_page_create_low(page_id_t page_id, ulint zip_size,
   free_block->initialise(page_id, zip_size, 1);
 
   buf_pool_t::hash_chain &chain= buf_pool.page_hash.cell_get(page_id.fold());
+loop:
   mysql_mutex_lock(&buf_pool.mutex);
 
-loop:
   buf_block_t *block= reinterpret_cast<buf_block_t*>
     (buf_pool.page_hash.get(page_id, chain));
 
@@ -3242,15 +3242,12 @@ loop:
       if (!mtr->have_x_latch(*block))
       {
         buf_block_buf_fix_inc(block);
-        while (!block->lock.x_lock_try())
+        if (!block->lock.x_lock_try())
         {
-          /* Wait for buf_page_write_complete() to release block->lock.
-          We must not hold buf_pool.mutex while waiting. */
-          timespec abstime;
-          set_timespec_nsec(abstime, 1000000);
-          my_cond_timedwait(&buf_pool.done_flush_list, &buf_pool.mutex.m_mutex,
-                            &abstime);
-        }
+          mysql_mutex_unlock(&buf_pool.mutex);
+          block->lock.x_lock();
+          mysql_mutex_lock(&buf_pool.mutex);
+	}
         mtr_memo_push(mtr, block, MTR_MEMO_PAGE_X_FIX);
       }
       else
@@ -3271,10 +3268,8 @@ loop:
       {
         hash_lock.write_unlock();
         /* Wait for buf_page_write_complete() to release the I/O fix. */
-        timespec abstime;
-        set_timespec_nsec(abstime, 1000000);
-        my_cond_timedwait(&buf_pool.done_flush_list, &buf_pool.mutex.m_mutex,
-                          &abstime);
+        mysql_mutex_unlock(&buf_pool.mutex);
+        os_aio_wait_until_no_pending_writes();
         goto loop;
       }
 
@@ -3834,9 +3829,6 @@ All pages must be in a replaceable state (not modified or latched). */
 void buf_pool_invalidate()
 {
 	mysql_mutex_lock(&buf_pool.mutex);
-
-	buf_flush_wait_batch_end(true);
-	buf_flush_wait_batch_end(false);
 
 	/* It is possible that a write batch that has been posted
 	earlier is still not complete. For buffer pool invalidation to
