@@ -321,6 +321,32 @@ buf_flush_relocate_on_flush_list(
 	ut_d(buf_flush_validate_low());
 }
 
+/** Increment a counter in a race-condition prone way. */
+TPOOL_SUPPRESS_TSAN static inline void inc_n_pages_written()
+{ buf_pool.stat.n_pages_written++; }
+
+/** Note that a block is no longer dirty, while not removing
+it from buf_pool.flush_list */
+inline void buf_page_t::write_complete(bool temporary)
+{
+  ut_ad(io_fix() == BUF_IO_WRITE);
+  ut_ad(temporary == fsp_is_system_temporary(id().space()));
+  if (temporary)
+  {
+    ut_ad(oldest_modification() == 2);
+    oldest_modification_= 0;
+  }
+  else
+  {
+    /* We use release memory order to guarantee that callers of
+    oldest_modification_acquire() will observe the block as
+    being detached from buf_pool.flush_list, after reading the value 0. */
+    ut_ad(oldest_modification() > 2);
+    oldest_modification_.store(1, std::memory_order_release);
+  }
+  io_fix_= BUF_IO_NONE;
+}
+
 /** Complete write of a file page from buf_pool.
 @param request write request */
 void buf_page_write_complete(const IORequest &request)
@@ -359,37 +385,52 @@ void buf_page_write_complete(const IORequest &request)
     buf_page_monitor(bpage, BUF_IO_WRITE);
   DBUG_PRINT("ib_buf", ("write page %u:%u",
                         bpage->id().space(), bpage->id().page_no()));
-  const bool temp= fsp_is_system_temporary(bpage->id().space());
 
-  mysql_mutex_lock(&buf_pool.mutex);
+  mysql_mutex_assert_not_owner(&buf_pool.mutex);
   mysql_mutex_assert_not_owner(&buf_pool.flush_list_mutex);
-  buf_pool.stat.n_pages_written++;
-  /* While we do not need any mutex for clearing oldest_modification
-  here, we hope that it will be in the same cache line with io_fix,
-  whose changes must be protected by buf_pool.mutex. */
-  ut_ad(temp || bpage->oldest_modification() > 2);
-  bpage->clear_oldest_modification(temp);
-  ut_ad(bpage->io_fix() == BUF_IO_WRITE);
-  bpage->set_io_fix(BUF_IO_NONE);
-
-  if (bpage->state() == BUF_BLOCK_FILE_PAGE)
-    reinterpret_cast<buf_block_t*>(bpage)->lock.u_unlock(true);
 
   if (request.is_LRU())
   {
+    mysql_mutex_lock(&buf_pool.mutex);
+    buf_pool.stat.n_pages_written++;
+    /* Releasing the io_fix and page latch must be protected by
+    buf_pool.mutex, because we do not want any thread to access the
+    block before we have freed it). */
+    bpage->write_complete(fsp_is_system_temporary(bpage->id().space()));
+    if (bpage->state() == BUF_BLOCK_FILE_PAGE)
+      reinterpret_cast<buf_block_t*>(bpage)->lock.u_unlock(true);
+
     buf_LRU_free_page(bpage, true);
 
     ut_ad(buf_pool.n_flush_LRU_);
-    if (!--buf_pool.n_flush_LRU_)
+    const auto n_LRU_left= --buf_pool.n_flush_LRU_;
+    mysql_mutex_unlock(&buf_pool.mutex);
+
+    if (!n_LRU_left)
     {
       pthread_cond_broadcast(&buf_pool.done_flush_LRU);
       pthread_cond_signal(&buf_pool.done_free);
     }
   }
   else
-    ut_ad(!temp);
-
-  mysql_mutex_unlock(&buf_pool.mutex);
+  {
+    ut_ad(bpage->oldest_modification() > 2);
+    ut_ad(!fsp_is_system_temporary(bpage->id().space()));
+    if (UNIV_LIKELY(bpage->state() == BUF_BLOCK_FILE_PAGE))
+    {
+      /* In normal checkpoint flushing, we may elide buf_pool.mutex. */
+      bpage->write_complete(false);
+      reinterpret_cast<buf_block_t*>(bpage)->lock.u_unlock(true);
+      inc_n_pages_written();
+    }
+    else
+    {
+      mysql_mutex_lock(&buf_pool.mutex);
+      bpage->write_complete(false);
+      buf_pool.stat.n_pages_written++;
+      mysql_mutex_unlock(&buf_pool.mutex);
+    }
+  }
 }
 
 /** Calculate a ROW_FORMAT=COMPRESSED page checksum and update the page.
@@ -779,7 +820,6 @@ buf_pool.mutex must be held.
 static bool buf_flush_page(buf_page_t *bpage, bool lru, fil_space_t *space)
 {
   ut_ad(bpage->in_file());
-  ut_ad(bpage->ready_for_flush());
   ut_ad((space->purpose == FIL_TYPE_TEMPORARY) ==
         (space == fil_system.temp_space));
   ut_ad(space->referenced());
@@ -788,12 +828,20 @@ static bool buf_flush_page(buf_page_t *bpage, bool lru, fil_space_t *space)
   block_lock *rw_lock;
 
   if (bpage->state() != BUF_BLOCK_FILE_PAGE)
+  {
+    ut_ad(bpage->ready_for_flush());
     rw_lock= nullptr;
+  }
   else
   {
     rw_lock= &reinterpret_cast<buf_block_t*>(bpage)->lock;
     if (!rw_lock->u_lock_try(true))
       return false;
+    if (!bpage->ready_for_flush() || bpage->oldest_modification() < 2)
+    {
+      rw_lock->u_unlock(true);
+      return false;
+    }
   }
 
   bpage->set_io_fix(BUF_IO_WRITE);

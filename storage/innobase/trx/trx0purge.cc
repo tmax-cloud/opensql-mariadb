@@ -692,7 +692,7 @@ not_free:
 
         if (bpage->oldest_modification() > 1)
         {
-          bpage->clear_oldest_modification(false);
+          bpage->reset_oldest_modification();
           mtr.memo_push(block, MTR_MEMO_PAGE_X_FIX);
         }
         else

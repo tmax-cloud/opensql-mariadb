@@ -822,9 +822,16 @@ public:
   inline void set_oldest_modification(lsn_t lsn);
   /** Clear oldest_modification after removing from buf_pool.flush_list */
   inline void clear_oldest_modification();
+  /** Reset the oldest_modification when marking a persistent page freed */
+  void reset_oldest_modification()
+  {
+    ut_ad(oldest_modification() > 2);
+    oldest_modification_.store(1, std::memory_order_release);
+  }
+
   /** Note that a block is no longer dirty, while not removing
   it from buf_pool.flush_list */
-  inline void clear_oldest_modification(bool temporary);
+  inline void write_complete(bool temporary);
 
   /** Notify that a page in a temporary tablespace has been modified. */
   void set_temp_modified()
@@ -894,9 +901,6 @@ public:
 
   /** @return whether the block is modified and ready for flushing */
   inline bool ready_for_flush() const;
-  /** @return whether the state can be changed to BUF_BLOCK_NOT_USED */
-  bool ready_for_replace() const
-  { return !oldest_modification() && can_relocate(); }
   /** @return whether the block can be relocated in memory.
   The block can be dirty, but it must not be I/O-fixed or bufferfixed. */
   inline bool can_relocate() const;
@@ -2109,35 +2113,13 @@ inline void buf_page_t::clear_oldest_modification()
   oldest_modification_.store(0, std::memory_order_release);
 }
 
-/** Note that a block is no longer dirty, while not removing
-it from buf_pool.flush_list */
-inline void buf_page_t::clear_oldest_modification(bool temporary)
-{
-  ut_ad(temporary == fsp_is_system_temporary(id().space()));
-  if (temporary)
-  {
-    ut_ad(oldest_modification() == 2);
-    oldest_modification_= 0;
-  }
-  else
-  {
-    /* We use release memory order to guarantee that callers of
-    oldest_modification_acquire() will observe the block as
-    being detached from buf_pool.flush_list, after reading the value 0. */
-    ut_ad(oldest_modification() > 2);
-    oldest_modification_.store(1, std::memory_order_release);
-  }
-}
-
 /** @return whether the block is modified and ready for flushing */
 inline bool buf_page_t::ready_for_flush() const
 {
   mysql_mutex_assert_owner(&buf_pool.mutex);
   ut_ad(in_LRU_list);
   ut_a(in_file());
-  ut_ad(fsp_is_system_temporary(id().space())
-        ? oldest_modification() == 2
-        : oldest_modification() > 2);
+  ut_ad(!fsp_is_system_temporary(id().space()) || oldest_modification() == 2);
   return io_fix_ == BUF_IO_NONE;
 }
 
