@@ -1159,7 +1159,7 @@ wait_for_io:
 
 		os_aio_wait_until_no_pending_writes();
 		goto loop;
-	} else if (buf_pool.any_io_pending()) {
+	} else if (buf_pool.some_io_pending()) {
 		goto wait_for_io;
 	} else {
 		buf_flush_buffer_pool();

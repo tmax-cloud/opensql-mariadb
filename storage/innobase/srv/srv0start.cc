@@ -249,7 +249,7 @@ static dberr_t create_log_file(bool create_new_db, lsn_t lsn,
 	}
 
 	DBUG_PRINT("ib_log", ("After innodb_log_abort_6"));
-	DBUG_ASSERT(!buf_pool.any_io_pending());
+	DBUG_ASSERT(!buf_pool.some_io_pending());
 	DBUG_ASSERT(!os_aio_pending_writes());
 
 	DBUG_EXECUTE_IF("innodb_log_abort_7", return DB_ERROR;);
@@ -1570,7 +1570,8 @@ file_checked:
 			ut_ad(srv_force_recovery <= SRV_FORCE_IGNORE_CORRUPT);
 			ut_ad(recv_no_log_write);
 			err = fil_write_flushed_lsn(log_sys.get_lsn());
-			DBUG_ASSERT(!buf_pool.any_io_pending());
+			DBUG_ASSERT(!buf_pool.some_io_pending());
+			DBUG_ASSERT(!os_aio_pending_writes());
 			log_sys.log.close_file();
 			if (err == DB_SUCCESS) {
 				bool trunc = srv_operation
@@ -1614,7 +1615,8 @@ file_checked:
 			threads until creating a log checkpoint at the
 			end of create_log_file(). */
 			ut_d(recv_no_log_write = true);
-			DBUG_ASSERT(!buf_pool.any_io_pending());
+			DBUG_ASSERT(!buf_pool.some_io_pending());
+			DBUG_ASSERT(!os_aio_pending_writes());
 
 			DBUG_EXECUTE_IF("innodb_log_abort_3",
 					return(srv_init_abort(DB_ERROR)););

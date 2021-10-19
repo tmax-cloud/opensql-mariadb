@@ -1605,13 +1605,12 @@ public:
   ulint n_flush_LRU_;
   /** broadcast when n_flush_LRU reaches 0; protected by mutex */
   pthread_cond_t done_flush_LRU;
-  /** Number of pending flush_list flush; protected by mutex */
-  ulint n_flush_list_;
+  /** whether a flush_list batch is active; protected by flush_list_mutex */
+  bool flush_list_active;
   /** broadcast when a batch completes; protected by flush_list_mutex */
   pthread_cond_t done_flush_list;
 
   TPOOL_SUPPRESS_TSAN ulint n_flush_LRU() const { return n_flush_LRU_; }
-  TPOOL_SUPPRESS_TSAN ulint n_flush_list() const { return n_flush_list_; }
 
 	/** @name General fields */
 	/* @{ */
@@ -1819,7 +1818,7 @@ public:
     last_activity_count= activity_count;
   }
 
-  // n_flush_LRU() + n_flush_list()
+  // os_aio_pending_writes()
   // is approximately COUNT(io_fix()==BUF_IO_WRITE) in flush_list
 
 	unsigned	freed_page_clock;/*!< a sequence number used
@@ -1904,15 +1903,10 @@ public:
   /** Reserve a buffer. */
   buf_tmp_buffer_t *io_buf_reserve() { return io_buf.reserve(); }
 
-  /** @return whether any I/O is pending */
-  bool any_io_pending() const
+  /** @return whether some I/O is pending, excluding os_aio_pending_writes() */
+  bool some_io_pending() const
   {
-    return n_pend_reads || n_flush_LRU() || n_flush_list();
-  }
-  /** @return total amount of pending I/O */
-  ulint io_pending() const
-  {
-    return n_pend_reads + n_flush_LRU() + n_flush_list();
+    return n_pend_reads || n_flush_LRU() || flush_list_active;
   }
 
 private:
