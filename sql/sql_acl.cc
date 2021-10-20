@@ -1545,7 +1545,12 @@ static my_bool do_validate(THD *, plugin_ref plugin, void *arg)
   struct validation_data *data= (struct validation_data *)arg;
   struct st_mariadb_password_validation *handler=
     (st_mariadb_password_validation *)plugin_decl(plugin)->info;
-  return handler->validate_password(data->user, data->password);
+  if (handler->validate_password(data->user, data->password))
+  {
+    my_error(ER_NOT_VALID_PASSWORD, MYF(0), plugin_ref_to_int(plugin)->name.str);
+    return true;
+  }
+  return false;
 }
 
 
@@ -1559,7 +1564,6 @@ static bool validate_password(LEX_USER *user, THD *thd)
     if (plugin_foreach(NULL, do_validate,
                        MariaDB_PASSWORD_VALIDATION_PLUGIN, &data))
     {
-      my_error(ER_NOT_VALID_PASSWORD, MYF(0));
       return true;
     }
   }
