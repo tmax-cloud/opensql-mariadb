@@ -320,7 +320,7 @@ public:
   { IF_WIN(ReleaseSRWLockExclusive(&lk), rw_unlock(&lk)); }
 #ifdef _WIN32
   /** @return whether any lock may be held by any thread */
-  bool is_locked_or_waiting() const noexcept { return (size_t&)(lock) != 0; }
+  bool is_locked_or_waiting() const noexcept { return (size_t&)(lk) != 0; }
   /** @return whether any lock may be held by any thread */
   bool is_locked() const noexcept { return is_locked_or_waiting(); }
   /** @return whether an exclusive lock may be held by any thread */

@@ -222,14 +222,15 @@ public:
 #else
 class page_hash_latch
 {
-  srw_spin_mutex lock;
+  srw_spin_mutex lk;
 public:
-  void read_lock() { write_lock(); }
-  void read_unlock() { write_unlock(); }
-  void write_lock() { lock.wr_lock(); }
-  void write_unlock() { lock.wr_unlock(); }
-  bool is_locked() const { return lock.is_locked(); }
+  void lock_shared() { lock(); }
+  void unlock_shared() { unlock(); }
+  void lock() { lk.wr_lock(); }
+  void unlock() { lk.wr_unlock(); }
+  bool is_locked() const { return lk.is_locked(); }
   bool is_write_locked() const { return is_locked(); }
+  bool is_locked_or_waiting() const { return is_locked(); }
 };
 #endif
 
