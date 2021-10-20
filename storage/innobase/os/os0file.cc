@@ -3811,6 +3811,9 @@ static void os_aio_wait_until_no_pending_writes_low()
      tpool::tpool_wait_end();
 }
 
+/** @return the number of pending writes */
+size_t os_aio_pending_writes() { return write_slots->pending_io_count(); }
+
 /** Wait until there are no pending asynchronous writes. */
 void os_aio_wait_until_no_pending_writes()
 {

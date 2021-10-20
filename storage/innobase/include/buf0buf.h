@@ -822,9 +822,16 @@ public:
   inline void set_oldest_modification(lsn_t lsn);
   /** Clear oldest_modification after removing from buf_pool.flush_list */
   inline void clear_oldest_modification();
+  /** Reset the oldest_modification when marking a persistent page freed */
+  void reset_oldest_modification()
+  {
+    ut_ad(oldest_modification() > 2);
+    oldest_modification_.store(1, std::memory_order_release);
+  }
+
   /** Note that a block is no longer dirty, while not removing
   it from buf_pool.flush_list */
-  inline void clear_oldest_modification(bool temporary);
+  inline void write_complete(bool temporary);
 
   /** Notify that a page in a temporary tablespace has been modified. */
   void set_temp_modified()
@@ -894,9 +901,6 @@ public:
 
   /** @return whether the block is modified and ready for flushing */
   inline bool ready_for_flush() const;
-  /** @return whether the state can be changed to BUF_BLOCK_NOT_USED */
-  bool ready_for_replace() const
-  { return !oldest_modification() && can_relocate(); }
   /** @return whether the block can be relocated in memory.
   The block can be dirty, but it must not be I/O-fixed or bufferfixed. */
   inline bool can_relocate() const;
@@ -1605,13 +1609,12 @@ public:
   ulint n_flush_LRU_;
   /** broadcast when n_flush_LRU reaches 0; protected by mutex */
   pthread_cond_t done_flush_LRU;
-  /** Number of pending flush_list flush; protected by mutex */
-  ulint n_flush_list_;
-  /** broadcast when n_flush_list reaches 0; protected by mutex */
+  /** whether a flush_list batch is active; protected by flush_list_mutex */
+  bool flush_list_active;
+  /** broadcast when a batch completes; protected by flush_list_mutex */
   pthread_cond_t done_flush_list;
 
   TPOOL_SUPPRESS_TSAN ulint n_flush_LRU() const { return n_flush_LRU_; }
-  TPOOL_SUPPRESS_TSAN ulint n_flush_list() const { return n_flush_list_; }
 
 	/** @name General fields */
 	/* @{ */
@@ -1819,7 +1822,7 @@ public:
     last_activity_count= activity_count;
   }
 
-  // n_flush_LRU() + n_flush_list()
+  // os_aio_pending_writes()
   // is approximately COUNT(io_fix()==BUF_IO_WRITE) in flush_list
 
 	unsigned	freed_page_clock;/*!< a sequence number used
@@ -1904,15 +1907,10 @@ public:
   /** Reserve a buffer. */
   buf_tmp_buffer_t *io_buf_reserve() { return io_buf.reserve(); }
 
-  /** @return whether any I/O is pending */
-  bool any_io_pending() const
+  /** @return whether some I/O is pending, excluding os_aio_pending_writes() */
+  bool some_io_pending() const
   {
-    return n_pend_reads || n_flush_LRU() || n_flush_list();
-  }
-  /** @return total amount of pending I/O */
-  ulint io_pending() const
-  {
-    return n_pend_reads + n_flush_LRU() + n_flush_list();
+    return n_pend_reads || n_flush_LRU() || flush_list_active;
   }
 
 private:
@@ -2115,35 +2113,13 @@ inline void buf_page_t::clear_oldest_modification()
   oldest_modification_.store(0, std::memory_order_release);
 }
 
-/** Note that a block is no longer dirty, while not removing
-it from buf_pool.flush_list */
-inline void buf_page_t::clear_oldest_modification(bool temporary)
-{
-  ut_ad(temporary == fsp_is_system_temporary(id().space()));
-  if (temporary)
-  {
-    ut_ad(oldest_modification() == 2);
-    oldest_modification_= 0;
-  }
-  else
-  {
-    /* We use release memory order to guarantee that callers of
-    oldest_modification_acquire() will observe the block as
-    being detached from buf_pool.flush_list, after reading the value 0. */
-    ut_ad(oldest_modification() > 2);
-    oldest_modification_.store(1, std::memory_order_release);
-  }
-}
-
 /** @return whether the block is modified and ready for flushing */
 inline bool buf_page_t::ready_for_flush() const
 {
   mysql_mutex_assert_owner(&buf_pool.mutex);
   ut_ad(in_LRU_list);
   ut_a(in_file());
-  ut_ad(fsp_is_system_temporary(id().space())
-        ? oldest_modification() == 2
-        : oldest_modification() > 2);
+  ut_ad(!fsp_is_system_temporary(id().space()) || oldest_modification() == 2);
   return io_fix_ == BUF_IO_NONE;
 }
 
