@@ -1861,9 +1861,12 @@ struct THD_TRANS
  /*
     Define the type of statements which cannot be rolled back safely.
     Each type occupies one bit in m_unsafe_rollback_flags.
+    MODIFIED_NON_TRANS_TABLE is limited to mark only the temporary table,
+    the rest is up to the "namesake" bool var.
   */
   enum unsafe_statement_types
   {
+    MODIFIED_NON_TRANS_TABLE= 1,
     CREATED_TEMP_TABLE= 2,
     DROPPED_TEMP_TABLE= 4,
     DID_WAIT= 8,
@@ -1871,6 +1874,21 @@ struct THD_TRANS
     EXECUTED_TABLE_ADMIN_CMD= 0x20
   };
 
+  bool cannot_safely_rollback() const
+  {
+    return modified_non_trans_table ||
+      (m_unsafe_rollback_flags &
+       (CREATED_TEMP_TABLE | DROPPED_TEMP_TABLE | MODIFIED_NON_TRANS_TABLE));
+  }
+
+  void mark_modified_non_trans_temp_table()
+  {
+    m_unsafe_rollback_flags|= MODIFIED_NON_TRANS_TABLE;
+  }
+  bool has_modified_non_trans_temp_table() const
+  {
+    return (m_unsafe_rollback_flags & MODIFIED_NON_TRANS_TABLE) != 0;
+  }
   void mark_executed_table_admin_cmd()
   {
     DBUG_PRINT("debug", ("mark_executed_table_admin_cmd"));

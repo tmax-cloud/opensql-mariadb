@@ -204,6 +204,16 @@ SET @commands= 'B T Drop-Temp-NN-Temp N Drop-Temp-NN-Temp Te C';
 SET @commands= 'B T Drop-Temp-NN-Temp N Drop-Temp-NN-Temp NeT-trig C';
 --source suite/rpl/include/rpl_drop_create_temp_table.inc
 
+# Has a side effect to create a temp table which is to be ...
+SET @commands= 'B T NeF-Create-N-Temp C';
+--source suite/rpl/include/rpl_drop_create_temp_table.inc
+# ...modified here and ...
+SET @commands= 'B T TeF-Temp C';
+--source suite/rpl/include/rpl_drop_create_temp_table.inc
+# ... finally dropped here.
+SET @commands= 'B T TeF-Drop-Temp C';
+--source suite/rpl/include/rpl_drop_create_temp_table.inc
+
 --echo
 --echo #
 --echo #3) Generates in the binlog what follows:
@@ -281,6 +291,16 @@ SET @commands= 'B T Drop-Temp-NN-Temp N Drop-Temp-NN-Temp Te R';
 --source suite/rpl/include/rpl_drop_create_temp_table.inc
 
 SET @commands= 'B T Drop-Temp-NN-Temp N Drop-Temp-NN-Temp NeT-trig R';
+--source suite/rpl/include/rpl_drop_create_temp_table.inc
+
+# Has a side effect to create a temp table which is to be ...
+SET @commands= 'B T NeF-Create-N-Temp R';
+--source suite/rpl/include/rpl_drop_create_temp_table.inc
+# ...modified here and ...
+SET @commands= 'B T TeF-Temp R';
+--source suite/rpl/include/rpl_drop_create_temp_table.inc
+# ... dropped here.
+SET @commands= 'B T TeF-Drop-Temp R';
 --source suite/rpl/include/rpl_drop_create_temp_table.inc
 
 --echo #########################################################################

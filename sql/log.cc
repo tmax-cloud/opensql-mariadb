@@ -2066,13 +2066,17 @@ inline bool is_prepared_xa(THD *thd)
 */
 static bool trans_cannot_safely_rollback(THD *thd, bool all)
 {
-  binlog_cache_mngr *const cache_mngr=
-    (binlog_cache_mngr*) thd_get_ha_data(thd, binlog_hton);
+  //binlog_cache_mngr *const cache_mngr=
+  //(binlog_cache_mngr*) thd_get_ha_data(thd, binlog_hton);
+
+  DBUG_ASSERT(ending_trans(thd, all));
 
   return ((thd->variables.option_bits & OPTION_KEEP_LOG) ||
+          thd->transaction->all.has_created_dropped_temp_table() ||
           (trans_has_updated_non_trans_table(thd) &&
            thd->wsrep_binlog_format() == BINLOG_FORMAT_STMT) ||
-          (cache_mngr->trx_cache.changes_to_non_trans_temp_table() &&
+          //(cache_mngr->trx_cache.changes_to_non_trans_temp_table() &&
+          (thd->transaction->all.has_modified_non_trans_temp_table() &&
            thd->wsrep_binlog_format() == BINLOG_FORMAT_MIXED) ||
           (trans_has_updated_non_trans_table(thd) &&
            ending_single_stmt_trans(thd,all) &&
@@ -2292,10 +2296,12 @@ static int binlog_rollback(handlerton *hton, THD *thd, bool all)
           was updated.
     */
     else if (ending_trans(thd, all) ||
-             (!(thd->variables.option_bits & OPTION_KEEP_LOG) &&
+             (//!(thd->variables.option_bits & OPTION_KEEP_LOG) &&
+              !thd->transaction->stmt.has_created_dropped_temp_table() &&
               (!stmt_has_updated_non_trans_table(thd) ||
                thd->wsrep_binlog_format() != BINLOG_FORMAT_STMT) &&
-              (!cache_mngr->trx_cache.changes_to_non_trans_temp_table() ||
+              //(!cache_mngr->trx_cache.changes_to_non_trans_temp_table() ||
+              (!thd->transaction->stmt.has_modified_non_trans_temp_table() ||
                thd->wsrep_binlog_format() != BINLOG_FORMAT_MIXED)))
       error= binlog_truncate_trx_cache(thd, cache_mngr, all);
   }
@@ -6636,8 +6642,10 @@ bool MYSQL_BIN_LOG::write(Log_event *event_info, my_bool *with_annotate)
       file= &cache_data->cache_log;
 
       if (thd->lex->stmt_accessed_non_trans_temp_table())
-        cache_data->set_changes_to_non_trans_temp_table();
-
+      {
+        //cache_data->set_changes_to_non_trans_temp_table();
+        thd->transaction->stmt.mark_modified_non_trans_temp_table();
+      }
       thd->binlog_start_trans_and_stmt();
     }
     DBUG_PRINT("info",("event type: %d",event_info->get_type_code()));

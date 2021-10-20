@@ -53,6 +53,38 @@ if (`SELECT HEX(@commands) = HEX('configure')`)
   DELIMITER ;|
 
   #
+  # Create a function creating or dropping a temp table
+  #
+  DELIMITER |;
+  CREATE FUNCTION f_cd_tmp (a INT, b INT) RETURNS int
+  BEGIN
+    IF a >= 0 THEN
+    BEGIN
+     IF b = 0 THEN
+       CREATE TEMPORARY TABLE tmp_0 (a INT) ENGINE=Innodb;
+     ELSE
+       CREATE TEMPORARY TABLE tmp_0 (a INT) ENGINE=MyISAM;
+     END IF;
+    END;
+    ELSE
+      DROP TEMPORARY TABLE tmp_0;
+    END IF;
+  RETURN ABS(a);
+  END|
+  DELIMITER ;|
+
+  #
+  # Create a function modifying a temp table
+  #
+  DELIMITER |;
+  CREATE FUNCTION f_mod_tmp (arg INT) RETURNS int
+  BEGIN
+      INSERT INTO tmp_0 SET a = arg;
+  RETURN arg;
+  END|
+  DELIMITER ;|
+
+  #
   # Creates a Temporary N-table that is never dropped.
   #
   --eval CREATE TEMPORARY TABLE nt_tmp_xx_1 ( id INT ) ENGINE = MyIsam
@@ -224,6 +256,8 @@ if (`SELECT HEX(@commands) = HEX('clean')`)
     --eval DROP TABLE IF EXISTS tt_$n
     --dec $n
   }
+  DROP FUNCTION f_cd_tmp;
+  DROP FUNCTION f_mod_tmp;
 
   sync_slave_with_master;
 
@@ -349,7 +383,39 @@ while (`SELECT HEX(@commands) != HEX('')`)
   {
     --enable_query_log
     --inc $nt_error_counter
-    eval INSERT INTO nt_error_1() VALUES ($nt_error_counter), ($nt_error_counter);
+    eval INSERT INTO nt_error_2() VALUES ($nt_error_counter), ($nt_error_counter);
+   --disable_query_log
+  }
+
+  if (`SELECT HEX(@command) = HEX('NeF-Create-N-Temp')`)
+  {
+    --enable_query_log
+    --inc $nt_error_counter
+    eval INSERT INTO nt_error_1() VALUES ($nt_error_counter), (f_cd_tmp($nt_error_counter,1));
+   --disable_query_log
+  }
+
+  if (`SELECT HEX(@command) = HEX('NeF-Create-T-Temp')`)
+  {
+    --enable_query_log
+    --inc $nt_error_counter
+    eval INSERT INTO nt_error_1() VALUES ($nt_error_counter), (f_cd_tmp($nt_error_counter,0));
+   --disable_query_log
+  }
+
+  if (`SELECT HEX(@command) = HEX('TeF-Drop-Temp')`)
+  {
+    --enable_query_log
+    --inc $nt_error_counter
+    eval INSERT INTO tt_error_1() VALUES ($nt_error_counter), (f_cd_tmp(-$nt_error_counter,0));
+   --disable_query_log
+  }
+
+  if (`SELECT HEX(@command) = HEX('TeF-Temp')`)
+  {
+    --enable_query_log
+    --inc $nt_error_counter
+    eval INSERT INTO tt_error_1() VALUES ($nt_error_counter), (f_mod_tmp($nt_error_counter));
    --disable_query_log
   }
 
