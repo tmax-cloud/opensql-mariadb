@@ -3231,7 +3231,6 @@ int handler::update_auto_increment()
   if (unlikely(nr == ULONGLONG_MAX))
       DBUG_RETURN(HA_ERR_AUTOINC_ERANGE);
 
-  DBUG_ASSERT(nr != 0);
   DBUG_PRINT("info",("auto_increment: %llu  nb_reserved_values: %llu",
                      nr, append ? nb_reserved_values : 0));
 

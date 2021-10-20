@@ -69,3 +69,11 @@ id	name
 drop table t1;
 disconnect test_con1;
 disconnect test_con2;
+connection default;
+CREATE TABLE t1(id int primary key auto_increment);
+SET SESSION insert_id=0;
+INSERT INTO t1 VALUES ();
+SELECT * from t1;
+id
+0
+DROP TABLE t1;
