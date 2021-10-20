@@ -330,13 +330,13 @@ static dberr_t create_log_file(bool create_new_db, lsn_t lsn,
 		srv_startup_is_before_trx_rollback_phase = false;
 	}
 
+	/* Enable checkpoints in buf_flush_page_cleaner(). */
+	recv_sys.recovery_on = false;
 	mysql_mutex_unlock(&log_sys.mutex);
 
 	log_make_checkpoint();
 	log_buffer_flush_to_disk();
 
-	/* Enable checkpoints in buf_flush_page_cleaner(). */
-	recv_sys.recovery_on = false;
 	return DB_SUCCESS;
 }
 
@@ -888,11 +888,9 @@ static lsn_t srv_prepare_to_delete_redo_log_file(bool old_exists)
 {
   DBUG_ENTER("srv_prepare_to_delete_redo_log_file");
 
-  mysql_mutex_lock(&buf_pool.flush_list_mutex);
   /* Disable checkpoints in the page cleaner. */
   ut_ad(!recv_sys.recovery_on);
   recv_sys.recovery_on= true;
-  mysql_mutex_unlock(&buf_pool.flush_list_mutex);
 
   /* Clean the buffer pool. */
   buf_flush_sync_batch(log_sys.get_lsn());
