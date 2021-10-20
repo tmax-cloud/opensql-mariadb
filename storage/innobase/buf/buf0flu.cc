@@ -1846,6 +1846,11 @@ static void buf_flush_wait(lsn_t lsn)
     os_aio_wait_until_no_pending_writes();
     mysql_mutex_lock(&buf_pool.flush_list_mutex);
   }
+
+  /* Wait for the checkpoint. */
+  while (buf_flush_sync_lsn)
+    my_cond_wait(&buf_pool.done_flush_list,
+                 &buf_pool.flush_list_mutex.m_mutex);
 }
 
 /** Wait until all persistent pages are flushed up to a limit.
