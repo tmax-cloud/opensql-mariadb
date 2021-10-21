@@ -40,39 +40,17 @@ More help is available from the Maria Discuss mailing list
 https://launchpad.net/~maria-discuss, MariaDB's Zulip
 instance, https://mariadb.zulipchat.com/ 
 
-Live QA for beginner contributors
-----
-MariaDB has a dedicated time each week when we answer new contributor questions live on Zulip.
-From 8:00 to 10:00 UTC on Mondays, and 10:00 to 12:00 UTC on Thursdays,
-anyone can ask any questions they’d like, and a live developer will be available to assist.
+# OpenSQL-MariaDB
+**OpenSQL-MariaDB** is the open source relational database based on MariaDB. It satisfies 100% MariaDB compatiblity.
 
-New contributors can ask questions any time, but we will provide immediate feedback during that interval.
+## Binary distribution
+* Todo(technet)
 
-Licensing
----------
+## Image distribution
+* Todo(docker hub)
 
-***************************************************************************
+## Installation
+* Todo(docker compose)
 
-NOTE: 
-
-MariaDB is specifically available only under version 2 of the GNU
-General Public License (GPLv2). (I.e. Without the "any later version"
-clause.) This is inherited from MySQL. Please see the README file in
-the MySQL distribution for more information.
-
-License information can be found in the COPYING file. Third party
-license information can be found in the THIRDPARTY file.
-
-***************************************************************************
-
-Bug Reports
-------------
-
-Bug and/or error reports regarding MariaDB should be submitted at:
-https://jira.mariadb.org
-
-For reporting security vulnerabilities see:
-https://mariadb.org/about/security-policy/
-
-The code for MariaDB, including all revision history, can be found at:
-https://github.com/MariaDB/server
+## Installation on Kubernetes
+* Todo(kubernetes yaml)
