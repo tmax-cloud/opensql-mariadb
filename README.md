@@ -1,5 +1,5 @@
 # OpenSQL-MariaDB
-**OpenSQL-MariaDB** is the open source relational database based on MariaDB. It satisfies 100% MariaDB compatiblity.
+**OpenSQL-MariaDB** is the open source relational database based on MariaDB. It satisfies 100% MariaDB compatibility.
 
 ## Binary distribution
 * Todo(technet)
