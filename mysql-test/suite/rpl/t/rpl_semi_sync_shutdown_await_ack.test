@@ -1,0 +1,177 @@
+#
+# Purpose:
+#   This test validates that data is consistent between a primary and replica
+# in semi-sync mode when the primary is issued `SHUTDOWN WAIT FOR SLAVES`
+# during an active communication. More specifically, the primary should not
+# kill the connection until it is sure the replica has received all binlog
+# data, i.e. once the primary receives the ACK. If a primary is issued a
+# shutdown before receiving an ACK, it should wait until either 1) the ACK is
+# received, or 2) the configured timeout (rpl_semi_sync_master_timeout) is
+# reached.
+#
+# Methodology:
+#   In order to test that the primary will wait for a semi-sync ACK or timeout
+# upon receiving `SHUTDOWN WAIT FOR SLAVES`, we simulate a delay on the slave
+# using sleep, and configure the timeout based on the sleep duration. In
+# particular, we use these as parameters to ensure the primary waits for its
+# replica in the following cases:
+#   Test Case 1) sleep < timeout results in the primary receiving the ACK
+#   Test Case 2) sleep > timeout results in the primary ignoring the ACK and
+#                shutting down regardless
+#
+#
+#  TODO: Extend test for multiple replicas
+#
+# References:
+#   MDEV-11853: semisync thread can be killed after sync binlog but before ACK
+#               in the sync state
+#
+--source include/master-slave.inc
+
+--connection master
+--sync_slave_with_master
+
+--echo #############################
+--echo # Set up semi-sync
+--echo #############################
+
+--echo #
+--echo # Uninstall semi-sync plugins on master and slave
+--echo #
+connection slave;
+source include/stop_slave.inc;
+reset slave;
+set @@global.rpl_semi_sync_master_enabled= 0;
+set @@global.rpl_semi_sync_slave_enabled= 0;
+
+connection master;
+reset master;
+set @@global.rpl_semi_sync_master_enabled= 0;
+set @@global.rpl_semi_sync_slave_enabled= 0;
+
+--echo # Semi-sync should be disabled on master
+show variables like 'rpl_semi_sync_master_enabled';
+
+--echo # Enable semi-sync on master
+set @@global.rpl_semi_sync_master_enabled = 1;
+--let $old_master_timeout= `SELECT @@global.rpl_semi_sync_master_timeout`
+show variables like 'rpl_semi_sync_master_enabled';
+
+--connection slave
+--source include/stop_slave.inc
+--echo # Semi-sync should be disabled on slave
+show variables like 'rpl_semi_sync_slave_enabled';
+
+--echo # Enable semi-sync on slave
+set @@global.rpl_semi_sync_slave_enabled = 1;
+show variables like 'rpl_semi_sync_slave_enabled';
+source include/start_slave.inc;
+
+--connection master
+--echo # Wait for master to recognize semi-sync slave
+let $status_var= Rpl_semi_sync_master_clients;
+let $status_var_value= 1;
+source include/wait_for_status_var.inc;
+
+--echo # Master should be enabled with one connection
+show status like 'Rpl_semi_sync_master_clients';
+show status like 'Rpl_semi_sync_master_status';
+
+--echo #############################
+--echo # Test cases from here
+--echo #############################
+
+--echo #
+--echo # Test Case 1) sleep < timeout results in the primary receiving the ACK
+--echo #
+
+--connection master
+set @@global.rpl_semi_sync_master_timeout= 2250; # slave sleeps for 1.5s
+--send CREATE TABLE t1 (a int);
+
+--connect(con2, localhost, root,,)
+--connection con2
+show status like 'Rpl_semi_sync_master_wait_sessions';
+
+--echo #
+--echo # Wait for replica to send ACK
+--echo #
+let $status_var= Rpl_semi_sync_master_wait_sessions;
+let $status_var_value= 1;
+source include/wait_for_status_var.inc;
+show status like 'Rpl_semi_sync_master_wait_sessions';
+
+--write_file $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+wait
+EOF
+
+--send SHUTDOWN WAIT FOR ALL SLAVES
+--reap
+--source include/wait_until_disconnected.inc
+
+--append_file $MYSQLTEST_VARDIR/tmp/mysqld.1.expect
+restart
+EOF
+
+--connection default
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+--connection master
+--reap
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+--connection con2
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+--connection slave
+--sync_with_master
+select * from t1;
+
+
+--echo #############################
+--echo # Cleanup
+--echo #############################
+
+--connection slave
+--source include/stop_slave.inc
+set @@global.rpl_semi_sync_slave_enabled= 0;
+--eval set @@global.rpl_semi_sync_master_timeout= $old_master_timeout
+source include/start_slave.inc;
+
+--disable_query_log
+call mtr.add_suppression(".*reply failed");
+--enable_query_log
+
+--connection master
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+let $status_var= Rpl_semi_sync_master_clients;
+let $status_var_value= 0;
+source include/wait_for_status_var.inc;
+
+--disable_query_log
+call mtr.add_suppression("Thread [0-9]+.*did not exit");
+call mtr.add_suppression("Timeout waiting");
+--enable_query_log
+
+set @@global.rpl_semi_sync_master_enabled = 0;
+--eval set @@global.rpl_semi_sync_master_timeout= $old_master_timeout
+
+drop table t1;
+
+--connection server_1
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+--connection server_2
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+--connection default
+--enable_reconnect
+--source include/wait_until_connected_again.inc
+
+--source include/rpl_end.inc

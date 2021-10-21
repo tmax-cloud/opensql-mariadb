@@ -1,0 +1,94 @@
+include/master-slave.inc
+[connection master]
+connection master;
+connection slave;
+#############################
+# Set up semi-sync
+#############################
+#
+# Uninstall semi-sync plugins on master and slave
+#
+connection slave;
+include/stop_slave.inc
+reset slave;
+set @@global.rpl_semi_sync_master_enabled= 0;
+set @@global.rpl_semi_sync_slave_enabled= 0;
+connection master;
+reset master;
+set @@global.rpl_semi_sync_master_enabled= 0;
+set @@global.rpl_semi_sync_slave_enabled= 0;
+# Semi-sync should be disabled on master
+show variables like 'rpl_semi_sync_master_enabled';
+Variable_name	Value
+rpl_semi_sync_master_enabled	OFF
+# Enable semi-sync on master
+set @@global.rpl_semi_sync_master_enabled = 1;
+show variables like 'rpl_semi_sync_master_enabled';
+Variable_name	Value
+rpl_semi_sync_master_enabled	ON
+connection slave;
+include/stop_slave.inc
+Warnings:
+Note	1255	Slave already has been stopped
+# Semi-sync should be disabled on slave
+show variables like 'rpl_semi_sync_slave_enabled';
+Variable_name	Value
+rpl_semi_sync_slave_enabled	OFF
+# Enable semi-sync on slave
+set @@global.rpl_semi_sync_slave_enabled = 1;
+show variables like 'rpl_semi_sync_slave_enabled';
+Variable_name	Value
+rpl_semi_sync_slave_enabled	ON
+include/start_slave.inc
+connection master;
+# Wait for master to recognize semi-sync slave
+# Master should be enabled with one connection
+show status like 'Rpl_semi_sync_master_clients';
+Variable_name	Value
+Rpl_semi_sync_master_clients	1
+show status like 'Rpl_semi_sync_master_status';
+Variable_name	Value
+Rpl_semi_sync_master_status	ON
+#############################
+# Test cases from here
+#############################
+#
+# Test Case 1) sleep < timeout results in the primary receiving the ACK
+#
+connection master;
+set @@global.rpl_semi_sync_master_timeout= 2250;
+CREATE TABLE t1 (a int);;
+connect con2, localhost, root,,;
+connection con2;
+show status like 'Rpl_semi_sync_master_wait_sessions';
+Variable_name	Value
+Rpl_semi_sync_master_wait_sessions	1
+#
+# Wait for replica to send ACK
+#
+show status like 'Rpl_semi_sync_master_wait_sessions';
+Variable_name	Value
+Rpl_semi_sync_master_wait_sessions	1
+SHUTDOWN WAIT FOR ALL SLAVES;
+connection default;
+connection master;
+connection con2;
+connection slave;
+select * from t1;
+a
+#############################
+# Cleanup
+#############################
+connection slave;
+include/stop_slave.inc
+set @@global.rpl_semi_sync_slave_enabled= 0;
+set @@global.rpl_semi_sync_master_timeout= 10000;
+include/start_slave.inc
+connection master;
+set @@global.rpl_semi_sync_master_enabled = 0;
+set @@global.rpl_semi_sync_master_timeout= 10000;
+drop table t1;
+connection server_1;
+connection server_2;
+connection default;
+include/rpl_end.inc
